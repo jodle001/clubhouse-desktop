@@ -39,10 +39,20 @@ sudo dnf install nodejs npm            # to run from source
 sudo dnf install rpm-build             # only if you want to build the .rpm
 ```
 
-If the window fails to start with a sandbox error, your kernel has
+## A note on the Chromium sandbox
+
+This Electron bundles Chromium 85, whose seccomp policy predates the `clone3()`
+syscall that glibc 2.34+ uses to create threads. On a current distro the filter
+kills child processes as they spawn with SIGSYS - you get a "electron crashed"
+report, and a GPU or renderer process dies while the window itself may keep
+working. `index.js` therefore passes `--disable-seccomp-filter-sandbox` on
+Linux, which turns off only the syscall filter and leaves the setuid/namespace
+sandbox in place.
+
+If the window fails to start with a *different* sandbox error, your kernel has
 unprivileged user namespaces disabled. Either re-enable them
-(`sudo sysctl -w kernel.unprivileged_userns_clone=1`) or start with
-`npm start -- --no-sandbox`.
+(`sudo sysctl -w kernel.unprivileged_userns_clone=1`) or, as a last resort,
+start with `npm start -- --no-sandbox`.
 
 # Status of sign-in
 

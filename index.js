@@ -36,6 +36,16 @@ contextMenu();
 app.setAppUserModelId("com.company.ClubHouse");
 app.commandLine.appendSwitch("ignore-certificate-errors");
 
+if (os.platform() == "linux") {
+	// This Electron bundles Chromium 85, whose seccomp policy predates the
+	// clone3() syscall. glibc 2.34+ uses clone3() in pthread_create, so on a
+	// current distro the filter SIGSYSes child processes as they spawn - a GPU
+	// or renderer process dies and the app either aborts or limps along with a
+	// "electron crashed" report. Turning off just the syscall filter leaves the
+	// setuid/namespace sandbox in place, unlike --no-sandbox.
+	app.commandLine.appendSwitch("disable-seccomp-filter-sandbox");
+}
+
 let mainWindow;
 
 const createMainWindow = async () => {
