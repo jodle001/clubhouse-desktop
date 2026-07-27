@@ -28,10 +28,19 @@ const Login = {
             // Remembered between runs so the country only has to be picked once.
             country: store.get('country') || DEFAULT_COUNTRY,
             countries: COUNTRIES,
-            loading:false
+            loading:false,
+            error:'',
+            errorPhone:''
         }
     },
     computed:{
+        // "Login did not pass token validation" is Clubhouse rejecting the
+        // device itself, not the number. Their own support docs describe it as
+        // an unsupported device or OS. Say so, rather than leaving a user to
+        // re-check a phone number that was never the problem.
+        isDeviceRejection: function(){
+            return /token validation/i.test(this.error);
+        },
         selectedCountry: function(){
             return findCountry(this.country);
         },
@@ -73,8 +82,10 @@ const Login = {
             }else{
                 console.error(result);
                 this.loading = false;
+                this.error = result.error_message || 'Request failed';
+                this.errorPhone = phone;
                 const notif = new Notification('Failed', {
-                    body: `${result.error_message || 'Request failed'} (sent as ${phone})`
+                    body: `${this.error} (sent as ${phone})`
                 });
             }
         }
@@ -99,6 +110,19 @@ const Login = {
                     </small>
                     <div class="d-flex align-items-center justify-content-center mt-4">
                         <button class="btn-primary" @click="smsAuth">Next</button>
+                    </div>
+                    <div v-if="error" class="login-error mt-4">
+                        <strong>{{ error }}</strong>
+                        <div class="mt-2" v-if="isDeviceRejection">
+                            Clubhouse rejected this <em>device</em>, not your number
+                            ({{ errorPhone }} was accepted as valid). Their support
+                            docs give this error for an unsupported device or OS, so
+                            sign-in is being gated on a check a desktop client cannot
+                            satisfy. See the README for the full explanation.
+                        </div>
+                        <div class="mt-2" v-else>
+                            Sent as {{ errorPhone }}.
+                        </div>
                     </div>
                 </div>
             </div>

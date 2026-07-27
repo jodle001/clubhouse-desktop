@@ -260,6 +260,21 @@ h3 {
 	line-height: 1.5;
 }
 
+.login-error {
+	font-size: 0.85rem;
+	line-height: 1.5;
+	text-align: center;
+	padding: 0.75rem 1rem;
+	border-radius: 15px;
+	background: rgba(220, 53, 69, 0.08);
+	color: rgb(148, 32, 43);
+}
+
+[data-theme="dark"] .login-error {
+	background: rgba(255, 120, 130, 0.12);
+	color: rgb(255, 160, 168);
+}
+
 .h1,
 .h2,
 .h3,

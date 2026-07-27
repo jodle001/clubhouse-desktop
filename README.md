@@ -44,6 +44,41 @@ unprivileged user namespaces disabled. Either re-enable them
 (`sudo sysctl -w kernel.unprivileged_userns_clone=1`) or start with
 `npm start -- --no-sandbox`.
 
+# Current status: sign-in is blocked
+
+Tested against the live API in 2026. The app itself is fine - it installs,
+launches, renders, and every screen works. Sign-in does not, and the reason is
+on Clubhouse's side rather than in this code.
+
+Submitting a phone number returns:
+
+```
+login did not pass token validation!
+```
+
+Clubhouse's own support documentation describes this error as the device being
+unsupported or running an unsupported operating system. The number is accepted
+as valid - the request gets far enough to be judged on where it came from. In
+other words sign-in is gated on the client proving it is a genuine app on a
+supported mobile OS, which a desktop Electron client is not and cannot pretend
+to be by editing request headers.
+
+What was ruled out along the way, in order:
+
+1. **Is the API alive?** Yes. `check_for_update` answers in ~200ms.
+2. **Is the 2021 build rejected?** It was flagged for a mandatory upgrade.
+   Raising the build headers to 23.09.01 / 2446 cleared that - the API now
+   reports `has_update: false`. See `app/profile.mjs`.
+3. **Was the number malformed?** Yes, and that was a real bug in this client -
+   it sent whatever was typed. Fixed; see `app/phone.mjs`. That changed the
+   error from "your phone number is incorrect" to the one above.
+4. **Is it the device check?** Yes, and that is where it stops.
+
+Anything that got past this would mean defeating a device attestation check,
+not fixing a bug in this repo. The rest of the app is in good shape if the
+situation ever changes, and everything up to the auth call is verified working
+against a mock backend.
+
 # The app identity this client presents
 
 This client talks to Clubhouse's *private* mobile API, and identifies itself as
