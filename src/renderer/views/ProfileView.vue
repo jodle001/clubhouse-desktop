@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useApi } from "../composables/useApi.js";
 import { useSession } from "../composables/useSession.js";
+import { notify } from "../composables/useToast.js";
 import AppAvatar from "../components/AppAvatar.vue";
 import AppSpinner from "../components/AppSpinner.vue";
 
@@ -9,41 +10,79 @@ const props = defineProps({ id: { type: [String, Number], required: true } });
 
 const { state } = useSession();
 const { run, loading } = useApi();
+
 const profile = ref(null);
 const busy = ref(false);
-const following = ref(false);
 const blocked = ref(false);
-const requested = ref(false);
+const confirmingBlock = ref(false);
 
 const isMe = computed(
 	() => props.id === "me" || Number(props.id) === state.user?.user_profile?.user_id
 );
 
+/**
+ * `follow_status` is the profile's own answer - "not_following", and by
+ * extension whatever it says for the other states - so it beats inferring the
+ * relationship from a list. /me's following_ids is the fallback for a response
+ * that omits it.
+ */
+const following = computed(() => {
+	const status = profile.value?.follow_status;
+	return status ? status !== "not_following" : Boolean(profile.value?._following);
+});
+
+const requested = computed(() => /request|pending/i.test(profile.value?.follow_status || ""));
+
+const joined = computed(() => {
+	const raw = profile.value?.time_created;
+	if (!raw) {
+		return "";
+	}
+
+	return new Date(raw).toLocaleDateString(undefined, { year: "numeric", month: "long" });
+});
+
+/** "Followed by A, B and 21 others" - the phone app's social proof. */
+const mutualSummary = computed(() => {
+	const people = profile.value?.mutual_follows || [];
+	const total = profile.value?.mutual_follows_count ?? people.length;
+
+	if (!people.length) {
+		return "";
+	}
+
+	const names = people.slice(0, 2).map(u => u.name);
+	const rest = total - names.length;
+
+	if (rest > 0) {
+		return `Followed by ${names.join(", ")} and ${rest} other${rest === 1 ? "" : "s"} you follow`;
+	}
+
+	return `Followed by ${names.join(" and ")}`;
+});
+
+const houses = computed(() => profile.value?.social_clubs || []);
+
 async function load() {
+	confirmingBlock.value = false;
+
 	if (isMe.value) {
 		const result = await run("me");
 		profile.value = result?.user_profile || null;
 		return;
 	}
 
-	// Whether we follow someone is decided by /me's following_ids, which is the
-	// only authoritative answer available. The old client read
-	// `notification_type === 0` off the profile - that is a notification
-	// setting, not a relationship, so the button could show either label
-	// regardless of the truth and Unfollow could be the first thing offered for
-	// a stranger.
-	const [result, mine] = await Promise.all([
-		run("getProfile", Number(props.id)),
-		run("me")
-	]);
+	const [result, mine] = await Promise.all([run("getProfile", Number(props.id)), run("me")]);
+	const found = result?.user_profile || null;
 
-	profile.value = result?.user_profile || null;
+	if (found) {
+		// Whether *we* blocked them is only in /me; the profile's
+		// is_blocked_by_network is a different thing entirely.
+		found._following = Boolean(mine?.following_ids?.includes(Number(props.id)));
+	}
 
-	// /me carries the relationship, so both of these are the server's answer
-	// rather than anything inferred from the profile itself.
-	following.value = Boolean(mine?.following_ids?.includes(Number(props.id)));
+	profile.value = found;
 	blocked.value = Boolean(mine?.blocked_ids?.includes(Number(props.id)));
-	requested.value = Boolean(mine?.requested_following_ids?.includes(Number(props.id)));
 }
 
 async function toggleFollow() {
@@ -57,9 +96,33 @@ async function toggleFollow() {
 
 	// run() returns null on failure, having already reported it.
 	if (result) {
-		following.value = wanted;
+		await load();
 	}
 
+	busy.value = false;
+}
+
+async function toggleBlock() {
+	// Blocking affects someone else and is not obvious to undo, so it asks
+	// once. Unblocking is harmless and goes straight through.
+	if (!blocked.value && !confirmingBlock.value) {
+		confirmingBlock.value = true;
+		return;
+	}
+
+	busy.value = true;
+	const wanted = !blocked.value;
+	const result = await run(wanted ? "block" : "unblock", profile.value.user_id);
+
+	if (result) {
+		blocked.value = wanted;
+		notify({
+			type: "success",
+			message: wanted ? `Blocked ${profile.value.name}.` : `Unblocked ${profile.value.name}.`
+		});
+	}
+
+	confirmingBlock.value = false;
 	busy.value = false;
 }
 
@@ -70,10 +133,14 @@ watch(() => props.id, load);
 <template>
 	<div class="page">
 		<AppSpinner v-if="loading && !profile" />
+
 		<div v-else-if="profile" class="card profile">
 			<AppAvatar :user="profile" :size="96" />
+
 			<h1 class="profile__name">{{ profile.name }}</h1>
 			<p class="muted">@{{ profile.username }}</p>
+
+			<p v-if="profile.follows_me" class="profile__badge">Follows you</p>
 
 			<!--
 				Counts only. /get_followers and /get_following are retired and
@@ -83,22 +150,76 @@ watch(() => props.id, load);
 			<div class="profile__counts">
 				<span><strong>{{ profile.num_followers ?? 0 }}</strong> followers</span>
 				<span><strong>{{ profile.num_following ?? 0 }}</strong> following</span>
+				<span v-if="profile.num_cofollows"><strong>{{ profile.num_cofollows }}</strong> co-follows</span>
 			</div>
 
 			<p v-if="profile.bio" class="profile__bio">{{ profile.bio }}</p>
 
-			<p v-if="profile.twitter" class="muted profile__link">🐦 @{{ profile.twitter }}</p>
-			<p v-if="profile.instagram" class="muted profile__link">📷 @{{ profile.instagram }}</p>
+			<p v-if="mutualSummary" class="profile__mutual">
+				<AppAvatar
+					v-for="person in (profile.mutual_follows || []).slice(0, 3)"
+					:key="person.user_id"
+					:user="person"
+					:size="22"
+				/>
+				<span>{{ mutualSummary }}</span>
+			</p>
 
-			<!-- Relationship, straight from /me rather than inferred. -->
-			<p v-if="blocked" class="profile__flag profile__flag--blocked">You have blocked this person.</p>
-			<p v-else-if="requested" class="profile__flag">Follow request pending.</p>
+			<div v-if="profile.twitter || profile.instagram" class="profile__links">
+				<span v-if="profile.twitter">🐦 @{{ profile.twitter }}</span>
+				<span v-if="profile.instagram">📷 @{{ profile.instagram }}</span>
+			</div>
+
+			<p v-if="houses.length" class="profile__houses">
+				<span class="muted">{{ profile.clubs_details_title || "Houses" }}:</span>
+				{{ houses.slice(0, 3).map(h => h.name).join(", ") }}
+				<span v-if="(profile.social_clubs_count ?? houses.length) > 3" class="muted">
+					and {{ (profile.social_clubs_count ?? houses.length) - 3 }} more
+				</span>
+			</p>
+
+			<p v-if="profile.invited_by_user_profile" class="muted profile__meta">
+				Nominated by
+				<RouterLink :to="{ name: 'user', params: { id: profile.invited_by_user_profile.user_id } }">
+					{{ profile.invited_by_user_profile.name }}
+				</RouterLink>
+			</p>
+
+			<p v-if="joined" class="muted profile__meta">Joined {{ joined }}</p>
+
+			<p v-if="blocked" class="profile__flag">You have blocked this person.</p>
+			<p v-else-if="profile.has_protected_profile" class="muted profile__meta">
+				This profile is private — following needs their approval.
+			</p>
 
 			<div class="row profile__actions">
-				<RouterLink v-if="isMe" :to="{ name: 'editProfile' }" class="btn btn-secondary">Edit profile</RouterLink>
-				<button v-else class="btn" :disabled="busy || blocked" @click="toggleFollow">
-					{{ following ? "Following" : requested ? "Requested" : "Follow" }}
-				</button>
+				<RouterLink v-if="isMe" :to="{ name: 'editProfile' }" class="btn btn-secondary">
+					Edit profile
+				</RouterLink>
+
+				<template v-else>
+					<button class="btn" :disabled="busy || blocked" @click="toggleFollow">
+						{{ following ? "Following" : requested ? "Requested" : "Follow" }}
+					</button>
+
+					<button
+						class="btn btn-secondary"
+						:class="{ 'btn-danger': confirmingBlock }"
+						:disabled="busy"
+						@click="toggleBlock"
+					>
+						{{ blocked ? "Unblock" : confirmingBlock ? "Really block?" : "Block" }}
+					</button>
+
+					<button
+						v-if="confirmingBlock"
+						class="btn btn-secondary"
+						:disabled="busy"
+						@click="confirmingBlock = false"
+					>
+						Cancel
+					</button>
+				</template>
 			</div>
 		</div>
 	</div>
@@ -108,22 +229,52 @@ watch(() => props.id, load);
 .page { padding: 1.25rem; max-width: 520px; margin: 0 auto; }
 .profile { text-align: center; display: grid; justify-items: center; gap: 0.35rem; }
 .profile__name { margin: 0.6rem 0 0; font-size: 1.25rem; }
-.profile__link {
-	margin: 0.15rem 0 0;
+
+.profile__badge {
+	margin: 0.25rem 0 0;
+	padding: 0.1rem 0.5rem;
+	font-size: 0.72rem;
+	border-radius: 999px;
+	background: var(--surface-2);
+	color: var(--text-muted);
+}
+
+.profile__counts { display: flex; gap: 1.25rem; margin: 0.75rem 0; font-size: 0.85rem; }
+.profile__bio { white-space: pre-wrap; font-size: 0.9rem; text-align: left; margin: 0.5rem 0 0; }
+
+.profile__mutual {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	flex-wrap: wrap;
+	justify-content: center;
+	margin: 0.75rem 0 0;
+	font-size: 0.8rem;
+	color: var(--text-muted);
+}
+
+.profile__links {
+	display: flex;
+	gap: 0.9rem;
+	margin-top: 0.5rem;
 	font-size: 0.85rem;
+}
+
+.profile__houses {
+	margin: 0.6rem 0 0;
+	font-size: 0.82rem;
+}
+
+.profile__meta {
+	margin: 0.3rem 0 0;
+	font-size: 0.8rem;
 }
 
 .profile__flag {
 	margin: 0.6rem 0 0;
 	font-size: 0.82rem;
-	color: var(--text-muted);
-}
-
-.profile__flag--blocked {
 	color: var(--danger);
 }
 
-.profile__counts { display: flex; gap: 1.25rem; margin: 0.75rem 0; font-size: 0.85rem; }
-.profile__bio { white-space: pre-wrap; font-size: 0.9rem; text-align: left; margin: 0.5rem 0 0; }
-.profile__actions { margin-top: 1rem; }
+.profile__actions { margin-top: 1rem; flex-wrap: wrap; justify-content: center; }
 </style>

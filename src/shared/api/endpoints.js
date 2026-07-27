@@ -41,6 +41,13 @@ export const endpoints = {
 
 	unfollow: (c, userId) => c.request("/unfollow", { body: { user_id: userId } }),
 
+	/** Both named `user_id` themselves, on a 400. */
+	block: (c, userId) => c.request("/block", { body: { user_id: userId } }),
+
+	unblock: (c, userId) => c.request("/unblock", { body: { user_id: userId } }),
+
+	getBlockedUsers: c => c.request("/get_blocked_users", { body: {} }),
+
 	searchUsers: (c, query) =>
 		c.request("/search_users", {
 			body: { query, cofollows_only: false, followers_only: false, following_only: false }

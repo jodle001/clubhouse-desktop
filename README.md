@@ -145,6 +145,8 @@ routed at all.
 | `/get_notifications` | gone, no known replacement |
 | `/get_following`, `/get_followers` | gone, no known replacement |
 | `/get_profile`, `/search_users` | fine |
+| `POST /block`, `POST /unblock` | alive - `{ user_id }` |
+| `POST /get_blocked_users` | alive |
 | `POST /send_channel_message` | alive - `{ channel, message }` |
 | `GET /get_channel_messages` | alive - chat history, `?channel=` |
 | `GET /get_chat_messages` | exists, but rejects everything tried |

@@ -23,6 +23,9 @@ const API_METHODS = [
 	// social
 	"follow",
 	"unfollow",
+	"block",
+	"unblock",
+	"getBlockedUsers",
 	"searchUsers",
 	// clubs & events
 	"getClub",
