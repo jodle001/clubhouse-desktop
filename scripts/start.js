@@ -5,10 +5,14 @@
  *   npm start -- --verbose
  *
  * `electron-vite preview` parses its own flags and rejects anything it does not
- * recognise, so a bare `--verbose` is a hard error. Its own escape hatch is a
- * trailing `--`, which it forwards via the ELECTRON_CLI_ARGS environment
- * variable. Setting that variable here does the same thing without a cryptic
- * dangling `--` in package.json that somebody would eventually tidy away.
+ * recognise, so a bare `--verbose` is a hard error. Everything after a trailing
+ * `--` is forwarded to Electron instead, which is the supported escape hatch.
+ *
+ * Setting ELECTRON_CLI_ARGS ourselves does not work, even though that is the
+ * variable electron-vite uses internally: its CLI does
+ * `if (options['--']) process.env.ELECTRON_CLI_ARGS = ...`, and cac always
+ * supplies `options['--']` as an array, so an empty one silently overwrites
+ * whatever we set.
  *
  * `out/` is gitignored, so a fresh clone has nothing to preview - hence the
  * build step first.
@@ -30,9 +34,11 @@ if (build.status !== 0) {
 	process.exit(build.status ?? 1);
 }
 
-const run = spawnSync(bin, ["preview", "--skipBuild"], {
-	...options,
-	env: { ...process.env, ELECTRON_CLI_ARGS: JSON.stringify(appArgs) }
-});
+const previewArgs = ["preview", "--skipBuild"];
+if (appArgs.length > 0) {
+	previewArgs.push("--", ...appArgs);
+}
+
+const run = spawnSync(bin, previewArgs, options);
 
 process.exit(run.status ?? 0);

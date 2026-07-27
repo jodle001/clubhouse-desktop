@@ -100,6 +100,18 @@ export class ClubhouseClient {
 			});
 		}
 
+		// Clubhouse reports application-level failures as HTTP 200 with
+		// { success: false, error_message }, so a 2xx on its own means nothing.
+		// Checking it here makes every endpoint fail loudly; leaving it to each
+		// caller meant only the two views that remembered to look ever noticed.
+		if (data?.success === false) {
+			throw new ApiError(data.error_message || "Clubhouse rejected the request", {
+				status: response.status,
+				endpoint,
+				body: data
+			});
+		}
+
 		return data;
 	}
 }

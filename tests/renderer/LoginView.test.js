@@ -52,6 +52,21 @@ describe("LoginView", () => {
 		expect(push).toHaveBeenCalledWith({ name: "verify", query: { phone: "+15551234567" } });
 	});
 
+	it("stays put when Clubhouse reports the number as blocked", async () => {
+		const bridge = stubBridge();
+		bridge.api.startPhoneAuth = vi
+			.fn()
+			.mockResolvedValue({ ok: true, data: { success: true, is_blocked: true } });
+
+		const wrapper = mountLogin();
+		await wrapper.find("input[type=tel]").setValue("5551234567");
+		await wrapper.find("button").trigger("click");
+		await new Promise(r => setTimeout(r, 0));
+
+		expect(push).not.toHaveBeenCalled();
+		expect(wrapper.find(".error-box").text()).toMatch(/not sending a code/i);
+	});
+
 	it("shows the API's own message when sign-in is refused", async () => {
 		const bridge = stubBridge();
 		bridge.api.startPhoneAuth = vi

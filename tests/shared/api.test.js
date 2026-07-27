@@ -57,6 +57,20 @@ describe("ClubhouseClient", () => {
 		});
 	});
 
+	it("treats HTTP 200 with success:false as a failure", async () => {
+		const transport = fakeTransport({ success: false, error_message: "blocked" });
+		await expect(makeClient(transport).request("/me", { body: {} })).rejects.toMatchObject({
+			name: "ApiError",
+			status: 200,
+			message: "blocked"
+		});
+	});
+
+	it("does not mistake a response with no success field for a failure", async () => {
+		const transport = fakeTransport({ users: [] });
+		await expect(makeClient(transport).request("/get_following")).resolves.toEqual({ users: [] });
+	});
+
 	it("turns a transport failure into an ApiError rather than leaking it", async () => {
 		const transport = vi.fn().mockRejectedValue(new Error("ECONNRESET"));
 		await expect(makeClient(transport).request("/me", { body: {} })).rejects.toBeInstanceOf(ApiError);

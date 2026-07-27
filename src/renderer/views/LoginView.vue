@@ -42,6 +42,19 @@ async function submit() {
 
 	try {
 		const result = await call("startPhoneAuth", phone);
+
+		// Clubhouse can answer success while declining to send anything -
+		// is_blocked comes back on this endpoint and is how a throttled or
+		// barred number presents. Advancing on success alone leaves you on the
+		// code screen waiting for a text that was never sent.
+		if (result.is_blocked) {
+			error.value =
+				"Clubhouse accepted the request but is not sending a code to this " +
+				"number right now. That usually means too many recent attempts - " +
+				"wait a while before trying again.";
+			return;
+		}
+
 		if (result.success) {
 			router.push({ name: "verify", query: { phone } });
 			return;
