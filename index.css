@@ -236,6 +236,30 @@ h3 {
 	width: 100%;
 }
 
+/* Country selector stacked above the national number on the sign-in screen.
+   Stacked rather than side by side so long country names are not clipped. */
+.phone-group {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+/* Bootstrap pins .form-control to a 38px height, which the 1rem padding in
+   this stylesheet then fills entirely - leaving a 6px content box that clips
+   the select's text. Size to content instead. */
+.phone-group .form-control {
+	border-radius: 15px !important;
+	width: 100%;
+	height: auto;
+}
+
+.phone-group .country-select {
+	cursor: pointer;
+	color: inherit;
+	/* Match the text input's line box so both controls are the same height. */
+	line-height: 1.5;
+}
+
 .h1,
 .h2,
 .h3,
@@ -765,6 +789,13 @@ input {
 [data-theme="dark"] .form-control:focus {
 	background: rgba(255, 255, 255, 0.1) !important;
 	color: var(--text-color) !important;
+}
+
+/* The dropdown list itself is drawn by the OS and does not inherit the
+   translucent background above, so give it a solid one. */
+[data-theme="dark"] .country-select option {
+	background: var(--white-color);
+	color: var(--text-color);
 }
 [data-theme="dark"] .search-input {
 	background: rgba(255, 255, 255, 0.05);
