@@ -35,7 +35,7 @@ const API_METHODS = [
 	"getEvents",
 	"getEvent",
 	// rooms
-	"getChannels",
+	"getFeed",
 	"joinChannel",
 	"leaveChannel",
 	"activePing",

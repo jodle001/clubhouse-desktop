@@ -131,21 +131,41 @@ parses its own arguments and rejects unknown ones.
 
 ## The 2021 API is partly gone
 
-Sign-in works, and `/me` still answers. But `get_channels`, `get_online_friends`
-and `get_events` - the calls the home screen is built on - return a plain-text
-`404 Not found`. Not an error the app can interpret: the paths are not routed at
-all. Clubhouse replaced the "hallway" those endpoints served, and every public
-description of this API dates from before that.
+Clubhouse retired the "hallway" this app was built around, and every public
+description of its API predates that. Several endpoints now answer a plain-text
+`404 Not found` - not an error the app can interpret, but a path that is not
+routed at all.
+
+| endpoint | state |
+| --- | --- |
+| `/me`, `/join_channel`, sign-in | fine |
+| `/get_channels` | gone, replaced by `/get_feed_v3` |
+| `/get_online_friends` | gone, no known replacement |
+| `/get_events` | gone, no known replacement |
+| `/get_notifications` | gone, no known replacement |
+| `/get_following` | gone, no known replacement |
+
+The home screen reads rooms out of the feed: `/get_feed_v3` answers
+`{ items, available_topics }`, and each item wraps one live room in a `channel`
+object carrying the fields `/get_channels` used to return. Other item kinds turn
+up in that list, so anything without a `channel` is skipped.
+
+Screens still built on retired endpoints - notifications, followers and
+following, events - will report the 404. They need either a replacement endpoint
+or removing.
 
 `npm run probe` asks the live API what it still serves, using your signed-in
 session and the app's own headers, so a result there means the same thing inside
-the app. It takes extra names to try:
+the app:
 
 ```sh
-npm run probe -- get_feed_v3 get_hallway
+npm run probe                          # the candidate list
+npm run probe -- get_hallway           # try specific names
+npm run probe -- --shape get_feed_v3   # print a response's structure
 ```
 
-Until the replacements are known, the home screen will be empty.
+`--shape` prints types and nesting rather than values, hiding anything that
+looks like a token, phone number or email, so its output is safe to share.
 
 ## Licence
 

@@ -52,6 +52,10 @@ export const endpoints = {
 			body: { query, cofollows_only: false, followers_only: false, following_only: false }
 		}),
 
+	// Retired by Clubhouse: these answer a plain-text 404, meaning the path is
+	// not routed at all. `npm run probe` confirms it. Kept so the views calling
+	// them fail with a clear message rather than "unknown API method", until
+	// each one has a replacement or its screen is removed.
 	getOnlineFriends: c => c.request("/get_online_friends", { body: {} }),
 
 	getNotifications: (c, { page = 1, pageSize = 20 } = {}) =>
@@ -70,7 +74,12 @@ export const endpoints = {
 	getEvent: (c, eventHashid) => c.request("/get_event", { body: { event_hashid: eventHashid } }),
 
 	// --- rooms --------------------------------------------------------
-	getChannels: c => c.request("/get_channels", { body: {} }),
+	/**
+	 * The feed replaced the hallway. `/get_channels` now 404s; this answers
+	 * { items, available_topics }, where each item wraps one live room in a
+	 * `channel` object carrying the same fields `/get_channels` used to return.
+	 */
+	getFeed: (c, body = {}) => c.request("/get_feed_v3", { body }),
 
 	joinChannel: (c, channel) =>
 		c.request("/join_channel", {

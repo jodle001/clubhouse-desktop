@@ -130,8 +130,21 @@ describe("endpoints", () => {
 
 	it("exposes every endpoint as a bound function", () => {
 		const api = createApi(makeClient(fakeTransport({})));
-		for (const name of ["me", "getChannels", "joinChannel", "leaveChannel", "searchUsers"]) {
+		for (const name of ["me", "getFeed", "joinChannel", "leaveChannel", "searchUsers"]) {
 			expect(typeof api[name], name).toBe("function");
 		}
+	});
+});
+
+describe("the feed", () => {
+	it("POSTs to get_feed_v3, the endpoint that replaced get_channels", async () => {
+		const transport = fakeTransport({ items: [], available_topics: [] });
+		const api = createApi(makeClient(transport));
+
+		await api.getFeed();
+
+		const [url, options] = transport.mock.calls[0];
+		expect(url).toContain("/get_feed_v3");
+		expect(options.method).toBe("POST");
 	});
 });

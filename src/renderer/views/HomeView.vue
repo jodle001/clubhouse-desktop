@@ -6,7 +6,6 @@ import { useSession } from "../composables/useSession.js";
 import { notify } from "../composables/useToast.js";
 import { isLatin } from "@shared/text.js";
 import RoomCard from "../components/RoomCard.vue";
-import UserRow from "../components/UserRow.vue";
 import AppSpinner from "../components/AppSpinner.vue";
 import EmptyState from "../components/EmptyState.vue";
 
@@ -15,8 +14,7 @@ const { state } = useSession();
 const { run } = useApi();
 
 const rooms = ref([]);
-const events = ref([]);
-const friends = ref([]);
+const topics = ref([]);
 const loading = ref(true);
 const filter = ref("");
 const creating = ref(false);
@@ -40,20 +38,24 @@ const visibleRooms = computed(() => {
 	});
 });
 
+/**
+ * The feed returns a list of items, each wrapping a live room under `channel`.
+ * Other item kinds may appear, so take the rooms and ignore the rest rather
+ * than assuming every item has one.
+ */
+function roomsFromFeed(feed) {
+	return (feed?.items || []).map(item => item.channel).filter(Boolean);
+}
+
 async function refresh() {
-	const [channels, friendList] = await Promise.all([
-		run("getChannels"),
-		run("getOnlineFriends")
-	]);
-
-	if (channels?.channels) {
-		rooms.value = channels.channels;
+	const feed = await run("getFeed");
+	if (!feed) {
+		loading.value = false;
+		return;
 	}
 
-	if (friendList?.users) {
-		friends.value = friendList.users;
-	}
-
+	rooms.value = roomsFromFeed(feed);
+	topics.value = feed.available_topics || [];
 	loading.value = false;
 }
 
@@ -71,11 +73,6 @@ async function createRoom() {
 onMounted(async () => {
 	await refresh();
 
-	const eventList = await run("getEvents");
-	if (eventList?.events) {
-		events.value = eventList.events;
-	}
-
 	// One interval, cleared on unmount. The old app started several and
 	// retried on failure with no delay.
 	timer = setInterval(refresh, 30000);
@@ -87,15 +84,10 @@ onUnmounted(() => clearInterval(timer));
 <template>
 	<div class="home">
 		<aside class="home__side">
-			<h2 class="home__heading">Upcoming</h2>
-			<EmptyState v-if="!events.length" message="No upcoming events." />
-			<ul v-else class="home__events">
-				<li v-for="event in events.slice(0, 8)" :key="event.event_id">
-					<RouterLink :to="{ name: 'event', params: { id: event.event_hashid || event.event_id } }">
-						<strong class="truncate">{{ event.name }}</strong>
-						<small class="muted truncate">{{ event.club?.name || event.description }}</small>
-					</RouterLink>
-				</li>
+			<h2 class="home__heading">Topics</h2>
+			<EmptyState v-if="!topics.length" message="No topics right now." />
+			<ul v-else class="home__topics">
+				<li v-for="topic in topics" :key="topic.key" class="truncate">{{ topic.display_name }}</li>
 			</ul>
 		</aside>
 
@@ -119,19 +111,13 @@ onUnmounted(() => clearInterval(timer));
 				<RoomCard v-for="room in visibleRooms" :key="room.channel" :room="room" />
 			</div>
 		</section>
-
-		<aside class="home__side">
-			<h2 class="home__heading">Online</h2>
-			<EmptyState v-if="!friends.length" message="Nobody you follow is online." />
-			<UserRow v-for="user in friends" :key="user.user_id" :user="user" subtitle="Online" />
-		</aside>
 	</div>
 </template>
 
 <style scoped>
 .home {
 	display: grid;
-	grid-template-columns: 220px minmax(0, 1fr) 220px;
+	grid-template-columns: 220px minmax(0, 1fr);
 	gap: 1.25rem;
 	padding: 1.25rem;
 	align-items: start;
@@ -174,31 +160,15 @@ onUnmounted(() => clearInterval(timer));
 	gap: 0.9rem;
 }
 
-.home__events {
+.home__topics {
 	list-style: none;
 	margin: 0;
 	padding: 0;
 	display: grid;
-	gap: 0.5rem;
-}
-
-.home__events a {
-	display: block;
-	padding: 0.5rem;
-	border-radius: var(--radius-sm);
-}
-
-.home__events a:hover {
-	background: var(--surface-2);
-}
-
-.home__events strong {
-	display: block;
+	gap: 0.35rem;
 	font-size: 0.85rem;
+	color: var(--text-muted);
+	text-transform: capitalize;
 }
 
-.home__events small {
-	display: block;
-	font-size: 0.75rem;
-}
 </style>
