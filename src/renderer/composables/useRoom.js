@@ -146,6 +146,24 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 	const speakers = computed(() => channel.users.filter(u => u.is_speaker));
 	const audience = computed(() => channel.users.filter(u => !u.is_speaker));
 
+	/**
+	 * The audience, split the way the phone app splits it. Every flag here
+	 * comes from join_channel's user objects, so this is the server's own
+	 * classification rather than a guess.
+	 *
+	 * Each person lands in exactly one group, in this order, so nobody is
+	 * listed twice.
+	 */
+	const followedBySpeakers = computed(() => audience.value.filter(u => u.is_followed_by_speaker));
+
+	const houseMembers = computed(() =>
+		audience.value.filter(u => !u.is_followed_by_speaker && u.is_social_club_member)
+	);
+
+	const others = computed(() =>
+		audience.value.filter(u => !u.is_followed_by_speaker && !u.is_social_club_member)
+	);
+
 	function upsertUser(user) {
 		const index = channel.users.findIndex(u => u.user_id === user.user_id);
 		if (index === -1) {
@@ -300,6 +318,9 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		chat,
 		speakers,
 		audience,
+		followedBySpeakers,
+		houseMembers,
+		others,
 		me,
 		muted,
 		handRaised,

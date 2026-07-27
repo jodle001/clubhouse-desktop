@@ -8,7 +8,12 @@ defineProps({
 </script>
 
 <template>
-	<div class="tile" :class="{ 'tile--speaking': speaking }">
+	<RouterLink
+		:to="{ name: 'user', params: { id: user.user_id } }"
+		class="tile"
+		:class="{ 'tile--speaking': speaking }"
+		:title="user.name"
+	>
 		<div class="tile__avatar">
 			<AppAvatar :user="user" :size="76" />
 			<span v-if="user.is_muted" class="tile__badge" title="Muted">🔇</span>
@@ -19,12 +24,17 @@ defineProps({
 			{{ user.first_name || user.name }}
 		</span>
 		<small class="muted truncate">@{{ user.username }}</small>
-	</div>
+	</RouterLink>
 </template>
 
 <style scoped>
 .tile {
 	display: flex;
+	color: inherit;
+	cursor: pointer;
+	border-radius: var(--radius-sm);
+	padding: 0.35rem;
+	transition: background 0.12s ease;
 	flex-direction: column;
 	align-items: center;
 	gap: 0.2rem;
@@ -38,6 +48,10 @@ defineProps({
 	padding: 3px;
 	border: 3px solid transparent;
 	transition: border-color 0.15s ease;
+}
+
+.tile:hover {
+	background: var(--surface-2);
 }
 
 .tile--speaking .tile__avatar {

@@ -109,10 +109,30 @@ async function send() {
 					</div>
 				</section>
 
-				<section v-if="room.audience.value.length">
-					<h2 class="room__heading">Also here ({{ room.audience.value.length }})</h2>
+				<section v-if="room.followedBySpeakers.value.length">
+					<h2 class="room__heading">
+						Followed by the speakers ({{ room.followedBySpeakers.value.length }})
+					</h2>
 					<div class="room__tiles">
-						<SpeakerTile v-for="user in room.audience.value" :key="user.user_id" :user="user" />
+						<SpeakerTile
+							v-for="user in room.followedBySpeakers.value"
+							:key="user.user_id"
+							:user="user"
+						/>
+					</div>
+				</section>
+
+				<section v-if="room.houseMembers.value.length">
+					<h2 class="room__heading">House members ({{ room.houseMembers.value.length }})</h2>
+					<div class="room__tiles">
+						<SpeakerTile v-for="user in room.houseMembers.value" :key="user.user_id" :user="user" />
+					</div>
+				</section>
+
+				<section v-if="room.others.value.length">
+					<h2 class="room__heading">Others in the room ({{ room.others.value.length }})</h2>
+					<div class="room__tiles">
+						<SpeakerTile v-for="user in room.others.value" :key="user.user_id" :user="user" />
 					</div>
 				</section>
 
@@ -178,21 +198,30 @@ async function send() {
  * Two columns: the room, and the chat as a panel down the right. Collapsing it
  * leaves only the tab, so the room takes the full width and there is always
  * something to click to get chat back.
+ *
+ * The room fills the window and only the left column scrolls, so the panel is
+ * genuinely fixed rather than merely sticky - sticky still drifts at the ends
+ * of a scroll, and a chat window that shifts as you scroll past it is worse
+ * than one that never moves.
  */
 .room {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
 	gap: 1rem;
-	align-items: start;
+	align-items: stretch;
+	height: 100%;
+	min-height: 0;
 	padding: 1.25rem;
 	max-width: 1400px;
 	margin: 0 auto;
-	padding-bottom: 6rem;
 }
 
 .room__main {
 	min-width: 0;
 	max-width: 1000px;
+	overflow-y: auto;
+	padding-right: 0.5rem;
+	padding-bottom: 6rem;
 }
 
 .room__header {
@@ -248,12 +277,10 @@ async function send() {
 /* --- chat panel ---------------------------------------------------- */
 
 .room__aside {
-	position: sticky;
-	top: 1.25rem;
 	display: flex;
 	align-items: stretch;
 	gap: 0.5rem;
-	height: calc(100vh - 8rem);
+	min-height: 0;
 }
 
 .room__tab {
@@ -330,14 +357,24 @@ async function send() {
 	min-width: 0;
 }
 
-/* Narrow windows: the panel would crowd the room, so it goes full width. */
+/*
+ * Narrow windows: the panel would crowd the room, so it stacks underneath and
+ * the whole view scrolls as one again.
+ */
 @media (max-width: 900px) {
 	.room {
 		grid-template-columns: minmax(0, 1fr);
+		height: auto;
+		padding-bottom: 6rem;
+	}
+
+	.room__main {
+		overflow-y: visible;
+		padding-right: 0;
+		padding-bottom: 0;
 	}
 
 	.room__aside {
-		position: static;
 		height: auto;
 	}
 

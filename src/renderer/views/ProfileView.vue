@@ -12,6 +12,8 @@ const { run, loading } = useApi();
 const profile = ref(null);
 const busy = ref(false);
 const following = ref(false);
+const blocked = ref(false);
+const requested = ref(false);
 
 const isMe = computed(
 	() => props.id === "me" || Number(props.id) === state.user?.user_profile?.user_id
@@ -36,7 +38,12 @@ async function load() {
 	]);
 
 	profile.value = result?.user_profile || null;
+
+	// /me carries the relationship, so both of these are the server's answer
+	// rather than anything inferred from the profile itself.
 	following.value = Boolean(mine?.following_ids?.includes(Number(props.id)));
+	blocked.value = Boolean(mine?.blocked_ids?.includes(Number(props.id)));
+	requested.value = Boolean(mine?.requested_following_ids?.includes(Number(props.id)));
 }
 
 async function toggleFollow() {
@@ -80,10 +87,17 @@ watch(() => props.id, load);
 
 			<p v-if="profile.bio" class="profile__bio">{{ profile.bio }}</p>
 
+			<p v-if="profile.twitter" class="muted profile__link">🐦 @{{ profile.twitter }}</p>
+			<p v-if="profile.instagram" class="muted profile__link">📷 @{{ profile.instagram }}</p>
+
+			<!-- Relationship, straight from /me rather than inferred. -->
+			<p v-if="blocked" class="profile__flag profile__flag--blocked">You have blocked this person.</p>
+			<p v-else-if="requested" class="profile__flag">Follow request pending.</p>
+
 			<div class="row profile__actions">
 				<RouterLink v-if="isMe" :to="{ name: 'editProfile' }" class="btn btn-secondary">Edit profile</RouterLink>
-				<button v-else class="btn" :disabled="busy" @click="toggleFollow">
-					{{ following ? "Following" : "Follow" }}
+				<button v-else class="btn" :disabled="busy || blocked" @click="toggleFollow">
+					{{ following ? "Following" : requested ? "Requested" : "Follow" }}
 				</button>
 			</div>
 		</div>
@@ -94,6 +108,21 @@ watch(() => props.id, load);
 .page { padding: 1.25rem; max-width: 520px; margin: 0 auto; }
 .profile { text-align: center; display: grid; justify-items: center; gap: 0.35rem; }
 .profile__name { margin: 0.6rem 0 0; font-size: 1.25rem; }
+.profile__link {
+	margin: 0.15rem 0 0;
+	font-size: 0.85rem;
+}
+
+.profile__flag {
+	margin: 0.6rem 0 0;
+	font-size: 0.82rem;
+	color: var(--text-muted);
+}
+
+.profile__flag--blocked {
+	color: var(--danger);
+}
+
 .profile__counts { display: flex; gap: 1.25rem; margin: 0.75rem 0; font-size: 0.85rem; }
 .profile__bio { white-space: pre-wrap; font-size: 0.9rem; text-align: left; margin: 0.5rem 0 0; }
 .profile__actions { margin-top: 1rem; }

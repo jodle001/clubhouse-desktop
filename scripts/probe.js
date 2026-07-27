@@ -104,7 +104,24 @@ const CANDIDATES = [
 	// --- activity -------------------------------------------------------
 	{ path: "/get_activity", method: "POST", body: {} },
 	{ path: "/get_notifications_v2", method: "POST", body: {} },
-	{ path: "/get_channel", method: "POST", body: {} }
+	{ path: "/get_channel", method: "POST", body: {} },
+
+	// --- blocking and reporting -----------------------------------------
+	// /me already reports blocked_ids, so the state is known; what is missing
+	// is how to change it. Sent empty, so nobody is blocked by asking.
+	{ path: "/block", method: "POST", body: {} },
+	{ path: "/unblock", method: "POST", body: {} },
+	{ path: "/block_user", method: "POST", body: {} },
+	{ path: "/unblock_user", method: "POST", body: {} },
+	{ path: "/get_blocked_users", method: "POST", body: {} },
+	{ path: "/report_incident", method: "POST", body: {} },
+
+	// --- follow requests, for private accounts --------------------------
+	// /me returns requested_following_ids, so these exist in some form.
+	{ path: "/get_follow_requests", method: "POST", body: {} },
+	{ path: "/accept_follow_request", method: "POST", body: {} },
+	{ path: "/get_mutual_follows", method: "POST", body: {} },
+	{ path: "/get_events_for_user", method: "POST", body: {} }
 ];
 
 // Everything above is sent with an empty or read-only body on purpose: an
