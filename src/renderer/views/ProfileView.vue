@@ -42,13 +42,14 @@ watch(() => props.id, load);
 			<h1 class="profile__name">{{ profile.name }}</h1>
 			<p class="muted">@{{ profile.username }}</p>
 
+			<!--
+				Counts only. /get_followers and /get_following are retired and
+				have no replacement, so linking to those lists just produced a
+				404 - a link that cannot work is worse than plain text.
+			-->
 			<div class="profile__counts">
-				<RouterLink :to="{ name: 'userlist', params: { id: profile.user_id, type: 'followers' } }">
-					<strong>{{ profile.num_followers ?? 0 }}</strong> followers
-				</RouterLink>
-				<RouterLink :to="{ name: 'userlist', params: { id: profile.user_id, type: 'following' } }">
-					<strong>{{ profile.num_following ?? 0 }}</strong> following
-				</RouterLink>
+				<span><strong>{{ profile.num_followers ?? 0 }}</strong> followers</span>
+				<span><strong>{{ profile.num_following ?? 0 }}</strong> following</span>
 			</div>
 
 			<p v-if="profile.bio" class="profile__bio">{{ profile.bio }}</p>

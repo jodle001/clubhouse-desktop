@@ -207,12 +207,17 @@ function shapeOf(value, indent = "  ", depth = 0) {
 const session = loadSession();
 const args = process.argv.slice(2);
 const wantsShape = args.includes("--shape");
-const names = args.filter(arg => !arg.startsWith("--"));
+
+// --channel PAKBKoJ7 - room endpoints need one, and an endpoint asked for a
+// channel and nothing else will name its next required field in the error.
+const channelFlag = args.indexOf("--channel");
+const channel = channelFlag === -1 ? null : args[channelFlag + 1];
+const names = args.filter((arg, i) => !arg.startsWith("--") && i !== channelFlag + 1);
 
 const extra = names.map(name => ({
 	path: name.startsWith("/") ? name : `/${name}`,
 	method: "POST",
-	body: {}
+	body: channel ? { channel } : {}
 }));
 
 console.log(`\nIdentity: ${APP_IDENTITY.userAgent} ${APP_IDENTITY.appVersion} (${APP_IDENTITY.appBuild})`);
@@ -227,7 +232,8 @@ if (wantsShape && extra.length === 0) {
 	process.exit(1);
 }
 
-for (const candidate of targets) {
+/** One request, exactly as the app would send it. */
+async function attempt(candidate) {
 	let url = API_ROOT + candidate.path;
 
 	if (candidate.query) {
@@ -245,14 +251,35 @@ for (const candidate of targets) {
 		options.body = JSON.stringify(candidate.body);
 	}
 
+	const response = await nodeTransport(url, options);
+	return { response, text: await response.text() };
+}
+
+/** Swaps POST for GET and back, carrying the parameters across. */
+function otherMethod(candidate) {
+	if (candidate.method === "POST") {
+		return { ...candidate, method: "GET", body: undefined, query: candidate.body || {} };
+	}
+
+	return { ...candidate, method: "POST", query: undefined, body: candidate.query || {} };
+}
+
+for (const candidate of targets) {
 	const label = `${candidate.method} ${candidate.path}`.padEnd(46);
 
 	try {
-		const response = await nodeTransport(url, options);
-		const text = await response.text();
+		let used = candidate;
+		let { response, text } = await attempt(candidate);
+
+		// 405 says the path exists but wants the other verb, so ask again
+		// rather than making the reader run it a second time by hand.
+		if (response.status === 405) {
+			used = otherMethod(candidate);
+			({ response, text } = await attempt(used));
+		}
 
 		if (wantsShape) {
-			console.log(`${candidate.method} ${candidate.path} -> ${response.status}`);
+			console.log(`${used.method} ${used.path} -> ${response.status}`);
 
 			try {
 				console.log(shapeOf(JSON.parse(text)), "\n");
@@ -264,11 +291,12 @@ for (const candidate of targets) {
 		}
 
 		const verdict = describe(response.status, response.headers?.["content-type"], text);
+		const retried = used !== candidate ? ` (as ${used.method})` : "";
 
-		console.log(`${label} ${String(response.status).padEnd(4)} ${verdict}`);
+		console.log(`${label} ${String(response.status).padEnd(4)} ${verdict}${retried}`);
 
 		if (response.status !== 404) {
-			alive.push(label.trim());
+			alive.push(`${used.method} ${used.path}`);
 		}
 	} catch (error) {
 		console.log(`${label} ---  ${error.message}`);
@@ -276,5 +304,6 @@ for (const candidate of targets) {
 }
 
 if (!wantsShape) {
-	console.log(`\nStill served: ${alive.length ? alive.join(", ") : "nothing"}\n`);
+	const unique = [...new Set(alive)];
+	console.log(`\nStill served: ${unique.length ? unique.join(", ") : "nothing"}\n`);
 }
