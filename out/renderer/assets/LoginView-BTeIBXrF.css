@@ -1,0 +1,27 @@
+
+.login[data-v-1c2fb311] {
+	width: min(420px, 100%);
+	text-align: center;
+}
+.login__logo[data-v-1c2fb311] {
+	font-size: 2.6rem;
+}
+.login h1[data-v-1c2fb311] {
+	margin: 0.4rem 0 0;
+	font-size: 1.15rem;
+}
+.login__sub[data-v-1c2fb311] {
+	margin: 0.15rem 0 1.75rem;
+	font-size: 0.85rem;
+}
+.login__preview[data-v-1c2fb311] {
+	font-size: 0.8rem;
+	margin: 0.6rem 0 0;
+	min-height: 1.2em;
+}
+.login__submit[data-v-1c2fb311] {
+	margin-top: 1.25rem;
+}
+.error-box[data-v-1c2fb311] {
+	margin-top: 1.25rem;
+}

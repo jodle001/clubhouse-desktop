@@ -1,227 +1,82 @@
 #!/usr/bin/env node
-"use strict";
-
 /**
- * Environment + backend check for the unofficial Clubhouse desktop client.
+ * Environment and backend check.
  *
- * The client talks to Clubhouse's private mobile API, identifying itself with
- * the build headers in app/profile.mjs. That API is not public and is not
- * versioned for third parties, so the most useful thing this script can tell
- * you is whether the endpoints the app depends on still answer today.
+ *   npm run doctor
  *
- * Run with: npm run doctor
+ * Probes Clubhouse's API with the same identity the app sends, so a failure
+ * here means the app would fail the same way.
  */
 
-const https = require("https");
-const http = require("http");
-const { URL } = require("url");
-const path = require("path");
-const { pathToFileURL } = require("url");
+import { createRequire } from "node:module";
+import { API_ROOT, APP_IDENTITY, buildHeaders, newDeviceId } from "../src/shared/profile.js";
 
-// Filled in from app/profile.mjs so the script always probes with the same
-// identity the app itself sends.
-let PROFILE = null;
-
-async function loadProfile() {
-	const file = path.join(__dirname, "..", "app", "profile.mjs");
-	const mod = await import(pathToFileURL(file).href);
-	return {
-		...mod.default,
-		// Overridable so the script can be pointed at a stub while testing it.
-		apiRoot: process.env.CLUBHOUSE_API_ROOT || mod.default.apiRoot
-	};
-}
-
-const TIMEOUT_MS = 15000;
-
-function request(path, overrides) {
-	const build = (overrides && overrides.appBuild) || PROFILE.appBuild;
-	const version = (overrides && overrides.appVersion) || PROFILE.appVersion;
-
-	return new Promise(resolve => {
-		const url = new URL(PROFILE.apiRoot + path);
-		const started = Date.now();
-		const transport = url.protocol === "http:" ? http : https;
-
-		const req = transport.request(
-			{
-				method: "GET",
-				hostname: url.hostname,
-				port: url.port || undefined,
-				path: url.pathname + url.search,
-				headers: {
-					"User-Agent": PROFILE.userAgent.replace(PROFILE.appBuild, build),
-					"CH-Languages": "en-US",
-					"CH-Locale": "en_US",
-					"CH-AppVersion": version,
-					"CH-AppBuild": build,
-					"CH-DeviceId": "00000000-0000-0000-0000-000000000000",
-					"CH-UserID": "(null)",
-					Accept: "application/json",
-					"Accept-Language": "en-US;q=1"
-				}
-			},
-			res => {
-				let body = "";
-				res.on("data", chunk => {
-					body += chunk;
-				});
-				res.on("end", () =>
-					resolve({
-						status: res.statusCode,
-						body: body.slice(0, 500),
-						ms: Date.now() - started
-					})
-				);
-			}
-		);
-
-		req.setTimeout(TIMEOUT_MS, () => {
-			req.destroy();
-			resolve({ error: `timed out after ${TIMEOUT_MS}ms` });
-		});
-		req.on("error", err => resolve({ error: err.message }));
-		req.end();
-	});
-}
+const require = createRequire(import.meta.url);
+const apiRoot = process.env.CLUBHOUSE_API_ROOT || API_ROOT;
 
 function heading(text) {
-	console.log(`\n${text}`);
-	console.log("-".repeat(text.length));
+	console.log(`\n${text}\n${"-".repeat(text.length)}`);
 }
 
-(async () => {
-	PROFILE = await loadProfile();
-
-	heading("Environment");
-	console.log(`node      ${process.version}`);
-	console.log(`platform  ${process.platform} ${process.arch}`);
+function version(pkg) {
 	try {
-		console.log(`electron  ${require("electron/package.json").version}`);
-	} catch (_) {
-		console.log("electron  not installed (run: npm install)");
+		return require(`${pkg}/package.json`).version;
+	} catch {
+		return "not installed";
 	}
+}
 
-	heading("Clubhouse API reachability");
-	console.log(`endpoint  ${PROFILE.apiRoot}/check_for_update`);
-	console.log(
-		`sending   CH-AppBuild: ${PROFILE.appBuild}  CH-AppVersion: ${PROFILE.appVersion}\n`
-	);
+heading("Environment");
+console.log(`node       ${process.version}`);
+console.log(`platform   ${process.platform} ${process.arch}`);
+console.log(`electron   ${version("electron")}`);
+console.log(`vue        ${version("vue")}`);
 
-	const result = await request("/check_for_update?is_testflight=0");
+heading("Clubhouse API");
+console.log(`endpoint   ${apiRoot}/check_for_update`);
+console.log(`identity   ${APP_IDENTITY.userAgent}  v${APP_IDENTITY.appVersion} (${APP_IDENTITY.appBuild})\n`);
 
-	if (result.error) {
-		console.log(`FAIL      ${result.error}`);
-		console.log(
-			"\nThe API host could not be reached. Check your network, or whether\n" +
-				"www.clubhouseapi.com still resolves from here."
-		);
-		process.exitCode = 1;
-		return;
-	}
+const started = Date.now();
+let response;
 
-	console.log(`HTTP ${result.status}  (${result.ms}ms)`);
-	console.log(`body: ${result.body || "(empty)"}`);
+try {
+	response = await fetch(`${apiRoot}/check_for_update?is_testflight=0`, {
+		headers: buildHeaders({ deviceId: newDeviceId() }),
+		signal: AbortSignal.timeout(15000)
+	});
+} catch (error) {
+	console.log(`FAIL       ${error.message}`);
+	console.log("\nThe API host could not be reached from here.");
+	process.exit(1);
+}
 
-	// A corporate proxy or sandbox can answer instead of Clubhouse; say so
-	// rather than blaming the API.
-	if (/allowlist|egress|proxy|blocked by|access denied by/i.test(result.body)) {
-		console.log(
-			"\nThis response came from a network proxy, not from Clubhouse. Allow\n" +
-				"www.clubhouseapi.com through your egress rules and run this again."
-		);
-		process.exitCode = 1;
-	} else if (result.status >= 200 && result.status < 300) {
-		let parsed = null;
-		try {
-			parsed = JSON.parse(result.body);
-		} catch (_) {
-			// fall through to the generic message below
-		}
+const body = await response.text();
+console.log(`HTTP ${response.status}  (${Date.now() - started}ms)`);
+console.log(`body: ${body.slice(0, 400) || "(empty)"}`);
 
-		if (parsed && parsed.has_update) {
-			heading("Verdict");
-			console.log(
-				`This client identifies as build ${PROFILE.appBuild}; the API reports the` +
-					`\ncurrent build as ${parsed.app_build} (${parsed.app_version}).`
-			);
+if (/allowlist|egress|proxy|blocked by/i.test(body)) {
+	console.log("\nThat reply came from a network proxy, not Clubhouse.");
+	process.exit(1);
+}
 
-			if (parsed.is_mandatory) {
-				console.log(
-					"\nThe upgrade is flagged MANDATORY. In the official app that means a\n" +
-						"forced-upgrade wall. Whether the API also enforces it server-side on\n" +
-						"the auth endpoints is not something check_for_update can answer - the\n" +
-						"only way to find out is to attempt a sign-in, which sends a real SMS."
-				);
-			}
+let parsed;
+try {
+	parsed = JSON.parse(body);
+} catch {
+	console.log("\nThe response was not JSON - the API has likely changed shape.");
+	process.exit(1);
+}
 
-			if (String(parsed.app_build) === String(PROFILE.appBuild)) {
-				console.log(
-					"\nNote that this client already sends the build the API calls current,\n" +
-						"and the API still demands an upgrade. check_for_update is therefore\n" +
-						"not a header check we can satisfy - treat it as informational only."
-				);
-				return;
-			}
+heading("Verdict");
 
-			// Ask again as the build the API just told us is current. This is a
-			// read-only probe - it only reveals whether the upgrade demand tracks
-			// the build headers at all.
-			const asCurrent = await request("/check_for_update?is_testflight=0", {
-				appBuild: String(parsed.app_build),
-				appVersion: String(parsed.app_version).split(" ")[0]
-			});
-
-			let current = null;
-			try {
-				current = JSON.parse(asCurrent.body);
-			} catch (_) {
-				// ignore
-			}
-
-			console.log(
-				`\nRe-probed as build ${parsed.app_build}: HTTP ${asCurrent.status}` +
-					(current ? `, has_update=${current.has_update}` : "")
-			);
-
-			if (current && current.has_update === false) {
-				console.log(
-					"The upgrade demand goes away purely by changing the build headers, so\n" +
-						"the check is header-based. Updating this client's app profile is\n" +
-						"therefore worth trying, though it is not proof that auth will pass."
-				);
-			} else if (current && current.has_update) {
-				console.log(
-					"The API still reports an update even for the build it just called\n" +
-						"current, which suggests check_for_update is stale rather than a real\n" +
-						"gate. Weak evidence that the build headers matter less than they look."
-				);
-			}
-		} else {
-			console.log(
-				"\nThe endpoint answered and reports no required update. Note that this\n" +
-					"does not guarantee login or joining rooms works - those need a valid\n" +
-					"account and may be rejected separately."
-			);
-		}
-	} else if (result.status === 401 || result.status === 403) {
-		console.log(
-			"\nThe API rejected this app build. Clubhouse is refusing requests that\n" +
-				`identify as build ${PROFILE.appBuild}, so signing in through this client\n` +
-				"will not work without further changes to app/profile.mjs."
-		);
-		process.exitCode = 1;
-	} else if (result.status === 426 || /update/i.test(result.body)) {
-		console.log(
-			"\nThe API is asking for an app upgrade. This client's build headers are\n" +
-				"too old to be accepted."
-		);
-		process.exitCode = 1;
-	} else {
-		console.log(
-			"\nUnexpected response. The private API has most likely changed shape\n" +
-				"since this client was written in 2021."
-		);
-		process.exitCode = 1;
-	}
-})();
+if (response.ok && parsed.has_update === false) {
+	console.log("The API accepts this client's identity.");
+	console.log("Note this endpoint is unauthenticated, so it says nothing about sign-in.");
+} else if (parsed.has_update) {
+	console.log(`The API wants build ${parsed.app_build} (${parsed.app_version}).`);
+	console.log(`This client sends ${APP_IDENTITY.appBuild}. See src/shared/profile.js.`);
+	process.exitCode = 1;
+} else {
+	console.log(`Unexpected reply (HTTP ${response.status}).`);
+	process.exitCode = 1;
+}

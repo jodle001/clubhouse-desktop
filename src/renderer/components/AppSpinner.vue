@@ -1,0 +1,3 @@
+<template>
+	<div class="spinner" role="status" aria-label="Loading" />
+</template>

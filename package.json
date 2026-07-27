@@ -1,132 +1,87 @@
 {
-	"name": "clubhouse",
-	"productName": "Clubhouse Desktop Client ( Unofficial )",
-	"version": "0.0.0",
-	"description": "Clubhouse unofficial desktop client",
-	"license": "MIT",
-	"main": "index.js",
-	"repository": "callmearta/clubhouse-desktop",
-	"author": {
-		"name": "Arta Mo",
-		"email": "salehmoosapour1377@gmail.com",
-		"url": "https://callmearta.ir"
-	},
-	"scripts": {
-		"lint": "xo",
-		"test": "npm run lint",
-		"start": "electron .",
-		"doctor": "node scripts/doctor.js",
-		"pack": "electron-builder --dir",
-		"dist": "electron-builder --macos --linux --windows",
-		"dist:linux": "electron-builder --linux",
-		"release": "np"
-	},
-	"nodemonConfig": {
-		"exec": "npm run dev",
-		"watch": [
-			"server/*",
-			"public/*"
-		],
-		"ignore": [
-			"**/__tests__/**",
-			"*.test.js",
-			"*.spec.js"
-		]
-	},
-	"agora_electron": {
-		"prebuilt": true,
-		"electron_version": "10.2.0"
-	},
-	"dependencies": {
-		"@babel/core": "^7.2.0",
-		"@babel/preset-env": "^7.2.0",
-		"@babel/register": "^7.0.0",
-		"agora-rtc-sdk": "^3.3.0",
-		"agora-rtm-sdk": "^1.4.2",
-		"clubhouse-api": "git+https://github.com/callmearta/clubhouse-api.git",
-		"cross-fetch": "^3.0.6",
-		"electron-context-menu": "^0.15.0",
-		"electron-debug": "^3.0.0",
-		"electron-reload": "^1.5.0",
-		"electron-store": "^5.1.0",
-		"electron-unhandled": "^3.0.0",
-		"electron-updater": "^4.0.6",
-		"electron-util": "^0.13.0",
-		"esm": "^3.2.25",
-		"nanoid": "^3.1.20",
-		"nodemon": "^2.0.7",
-		"pubnub": "^4.29.11",
-		"regenerator-runtime": "^0.13.7",
-		"rimraf": "^3.0.2",
-		"store": "^2.0.12",
-		"toastr": "^2.1.4",
-		"universal-analytics": "^0.4.23",
-		"uuid": "^8.3.2",
-		"vue": "^2.6.12",
-		"vue-router": "^3.5.1",
-		"vue-toastr": "^2.1.2",
-		"webpack": "^5.28.0",
-		"webpack-cli": "^4.5.0"
-	},
-	"devDependencies": {
-		"@babel/core": "^7.2.0",
-		"@babel/preset-env": "^7.2.0",
-		"@babel/register": "^7.0.0",
-		"electron": "^10.2.0",
-		"electron-builder": "^21.2.0",
-		"np": "^5.0.3",
-		"xo": "^0.25.3"
-	},
-	"xo": {
-		"envs": [
-			"node",
-			"browser"
-		],
-		"ignores": [
-			"app/a.js",
-			"app/agora.js",
-			"build/**",
-			"dist/**",
-			"static/**"
-		]
-	},
-	"np": {
-		"publish": false,
-		"releaseDraft": false
-	},
-	"build": {
-		"appId": "com.company.ClubHouse",
-		"mac": {
-			"category": "public.app-category.social-networking",
-			"darkModeSupport": true,
-			"hardenedRuntime": true,
-			"entitlements": "entitlements.mac.plist",
-			"extendInfo": {
-				"NSMicrophoneUsageDescription": "Please give us access to your microphone"
-			}
-		},
-		"dmg": {
-			"iconSize": 160,
-			"contents": [
-				{
-					"x": 180,
-					"y": 170
-				},
-				{
-					"x": 480,
-					"y": 170,
-					"type": "link",
-					"path": "/Applications"
-				}
-			]
-		},
-		"linux": {
-			"target": [
-				"AppImage",
-				"deb",
-				"rpm"
-			],
-			"category": "Network;Chat"
-		}
-	}
+  "name": "clubhouse-desktop",
+  "productName": "Clubhouse Desktop",
+  "version": "1.0.0",
+  "description": "An unofficial Clubhouse desktop client",
+  "license": "MIT",
+  "type": "module",
+  "main": "out/main/index.js",
+  "repository": "jodle001/clubhouse-desktop",
+  "author": "jodle001",
+  "contributors": [
+    "Arta Mo <salehmoosapour1377@gmail.com> (original author, https://callmearta.ir)"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "start": "electron-vite preview",
+    "build": "electron-vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "doctor": "node scripts/doctor.js",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder --macos --linux --windows",
+    "dist:linux": "npm run build && electron-builder --linux"
+  },
+  "dependencies": {
+    "electron-store": "^11.0.2",
+    "pubnub": "^12.0.2",
+    "vue": "^3.5.40",
+    "vue-router": "^4.6.3"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/test-utils": "^2.4.6",
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "eslint": "^9.39.1",
+    "eslint-plugin-vue": "^10.6.0",
+    "jsdom": "^28.0.1",
+    "vite": "^7.2.7",
+    "vitest": "^3.2.4"
+  },
+  "optionalDependencies": {
+    "agora-rtc-sdk-ng": "^4.24.6"
+  },
+  "build": {
+    "appId": "com.jodle001.clubhouse-desktop",
+    "productName": "Clubhouse Desktop",
+    "files": [
+      "out/**/*",
+      "resources/**/*"
+    ],
+    "directories": {
+      "buildResources": "resources"
+    },
+    "mac": {
+      "category": "public.app-category.social-networking",
+      "darkModeSupport": true,
+      "hardenedRuntime": true,
+      "entitlements": "resources/entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Microphone access is required to speak in rooms."
+      }
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "category": "Network;Chat"
+    },
+    "win": {
+      "target": "nsis"
+    }
+  },
+  "overrides": {
+    "brace-expansion": "^5.0.8",
+    "minimatch": "^10.1.1",
+    "http-cache-semantics": "^4.2.0",
+    "semver": "^7.7.3"
+  }
 }

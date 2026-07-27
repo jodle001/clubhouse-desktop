@@ -1,0 +1,86 @@
+
+.tile[data-v-cadaccf8] {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.2rem;
+	width: 96px;
+	text-align: center;
+}
+.tile__avatar[data-v-cadaccf8] {
+	position: relative;
+	border-radius: 50%;
+	padding: 3px;
+	border: 3px solid transparent;
+	transition: border-color 0.15s ease;
+}
+.tile--speaking .tile__avatar[data-v-cadaccf8] {
+	border-color: var(--green);
+}
+.tile__badge[data-v-cadaccf8] {
+	position: absolute;
+	right: 0;
+	bottom: 2px;
+	background: var(--surface);
+	border-radius: 50%;
+	font-size: 0.8rem;
+	width: 22px;
+	height: 22px;
+	display: grid;
+	place-items: center;
+	box-shadow: var(--shadow);
+}
+.tile__name[data-v-cadaccf8] {
+	font-size: 0.82rem;
+	font-weight: 600;
+	max-width: 100%;
+}
+.tile small[data-v-cadaccf8] {
+	font-size: 0.72rem;
+	max-width: 100%;
+}
+
+.room[data-v-fa4a7fcb] {
+	padding: 1.25rem;
+	max-width: 1000px;
+	margin: 0 auto;
+	padding-bottom: 6rem;
+}
+.room__header[data-v-fa4a7fcb] {
+	display: flex;
+	align-items: flex-start;
+	gap: 1rem;
+	margin-bottom: 1.5rem;
+}
+.room__topic[data-v-fa4a7fcb] {
+	margin: 0;
+	font-size: 1.35rem;
+}
+.room__silent[data-v-fa4a7fcb] {
+	margin: 0.3rem 0 0;
+	font-size: 0.8rem;
+}
+.room__heading[data-v-fa4a7fcb] {
+	font-size: 0.78rem;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--text-muted);
+	margin: 1.25rem 0 0.75rem;
+}
+.room__tiles[data-v-fa4a7fcb] {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 1.1rem;
+}
+.room__bar[data-v-fa4a7fcb] {
+	position: fixed;
+	left: 50%;
+	bottom: 1.25rem;
+	transform: translateX(-50%);
+	display: flex;
+	gap: 0.6rem;
+	padding: 0.6rem;
+	background: var(--surface);
+	border-radius: 999px;
+	box-shadow: var(--shadow);
+}

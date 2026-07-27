@@ -1,0 +1,78 @@
+/**
+ * The application identity this client presents to Clubhouse's private API.
+ *
+ * Clubhouse refuses sign-in from anything claiming to be an iPhone with
+ * "login did not pass token validation" - Apple's DeviceCheck / App Attest is
+ * iOS-only, so an iOS client can be asked for a hardware-signed token that no
+ * desktop can produce. Identifying as Android avoids that check entirely.
+ *
+ * These values were recovered from Clubdeck, a desktop client that does still
+ * sign in, and cross-checked against four strings whose values were already
+ * known (the Agora key and the three PubNub values).
+ */
+
+export const API_ROOT = "https://www.clubhouseapi.com/api";
+
+export const APP_IDENTITY = Object.freeze({
+	userAgent: "clubhouse/android",
+	appVersion: "0.1.8",
+	appBuild: "2576"
+});
+
+/** Credentials for the services Clubhouse hosts its rooms and signalling on. */
+export const SERVICES = Object.freeze({
+	agoraAppId: "938de3e8055e42b281bb8c6f69c21f78",
+	pubnubOrigin: "https://clubhouse.pubnub.com",
+	pubnubPublishKey: "pub-c-6878d382-5ae6-4494-9099-f930f938868b",
+	pubnubSubscribeKey: "sub-c-a4abea84-9ca3-11ea-8e71-f2b83ac9263d"
+});
+
+/**
+ * CH-DeviceId must be stable. Left to the API client it would be a fresh UUID
+ * per request, making one session look like dozens of devices.
+ */
+export function newDeviceId(randomUUID = globalThis.crypto?.randomUUID) {
+	if (typeof randomUUID === "function") {
+		return randomUUID.call(globalThis.crypto).toUpperCase();
+	}
+
+	const bytes = new Uint8Array(16);
+	for (let i = 0; i < 16; i++) {
+		bytes[i] = Math.floor(Math.random() * 256);
+	}
+
+	bytes[6] = (bytes[6] & 0x0f) | 0x40;
+	bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+	const hex = Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+	return [
+		hex.slice(0, 8),
+		hex.slice(8, 12),
+		hex.slice(12, 16),
+		hex.slice(16, 20),
+		hex.slice(20)
+	]
+		.join("-")
+		.toUpperCase();
+}
+
+/** Headers every request carries, given a session. */
+export function buildHeaders({ deviceId, userId, authToken, locale = "en_US", language = "en-US" } = {}) {
+	const headers = {
+		"User-Agent": APP_IDENTITY.userAgent,
+		"CH-Languages": language,
+		"CH-Locale": locale,
+		"CH-AppVersion": APP_IDENTITY.appVersion,
+		"CH-AppBuild": APP_IDENTITY.appBuild,
+		"CH-DeviceId": deviceId || "(null)",
+		"CH-UserID": userId == null ? "(null)" : String(userId),
+		Accept: "application/json",
+		"Accept-Language": "en-US;q=1"
+	};
+
+	if (authToken) {
+		headers.Authorization = `Token ${authToken}`;
+	}
+
+	return headers;
+}
