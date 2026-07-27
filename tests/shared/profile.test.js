@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { APP_IDENTITY, buildHeaders, newDeviceId, SERVICES } from "@shared/profile.js";
+import {
+	APP_IDENTITY,
+	buildHeaders,
+	IDENTITIES,
+	newDeviceId,
+	resolveIdentity,
+	SERVICES
+} from "@shared/profile.js";
 
 describe("app identity", () => {
 	it("presents as Android, not iOS", () => {
@@ -12,6 +19,25 @@ describe("app identity", () => {
 	it("pins the build the API accepts", () => {
 		expect(APP_IDENTITY.appVersion).toBe("0.1.8");
 		expect(APP_IDENTITY.appBuild).toBe("2576");
+	});
+
+	it("can be swapped for another identity by name", () => {
+		expect(resolveIdentity("android")).toMatchObject({
+			userAgent: "clubhouse/android/3389",
+			appVersion: "1.0.1",
+			appBuild: "3389"
+		});
+	});
+
+	it("falls back to the default rather than sending nothing", () => {
+		expect(resolveIdentity("nonsense")).toEqual(resolveIdentity("clubdeck"));
+		expect(resolveIdentity(undefined).appBuild).toBe("2576");
+	});
+
+	it("never offers an iOS identity, whichever is picked", () => {
+		for (const identity of Object.values(IDENTITIES)) {
+			expect(identity.userAgent).not.toMatch(/iPhone|iOS/i);
+		}
 	});
 });
 

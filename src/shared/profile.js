@@ -13,11 +13,43 @@
 
 export const API_ROOT = "https://www.clubhouseapi.com/api";
 
-export const APP_IDENTITY = Object.freeze({
-	userAgent: "clubhouse/android",
-	appVersion: "0.1.8",
-	appBuild: "2576"
+/**
+ * Clubhouse can accept a sign-in request (`success: true`, `is_blocked: false`)
+ * and then simply not send the text. There is no field that says so, which
+ * makes the identity the first thing to vary when no code arrives.
+ *
+ * Pick one with CLUBHOUSE_IDENTITY, so trying another is a restart rather than
+ * a code change:
+ *
+ *   CLUBHOUSE_IDENTITY=android npm start -- --verbose
+ */
+export const IDENTITIES = Object.freeze({
+	// Clubdeck's, recovered from its bundle. The default because Clubdeck is a
+	// desktop client known to work, and this set did deliver a code here once.
+	clubdeck: { userAgent: "clubhouse/android", appVersion: "0.1.8", appBuild: "2576" },
+
+	// The same build, but with the User-Agent in the shape real Android clients
+	// use. `clubhouse/android` came out of an obfuscated string table, which
+	// stores fragments - the app may well append the build at runtime, in which
+	// case what we send is truncated.
+	"clubdeck-ua": { userAgent: "clubhouse/android/2576", appVersion: "0.1.8", appBuild: "2576" },
+
+	// A later Android identity, as used by clubhouse-py.
+	android: { userAgent: "clubhouse/android/3389", appVersion: "1.0.1", appBuild: "3389" }
 });
+
+export const DEFAULT_IDENTITY = "clubdeck";
+
+/** Unknown names fall back to the default rather than sending nothing. */
+export function resolveIdentity(name) {
+	return Object.freeze({ ...(IDENTITIES[name] || IDENTITIES[DEFAULT_IDENTITY]) });
+}
+
+// `process` is absent in the renderer, which bundles this module for SERVICES.
+const identityName =
+	typeof process !== "undefined" ? process.env?.CLUBHOUSE_IDENTITY : undefined;
+
+export const APP_IDENTITY = resolveIdentity(identityName);
 
 /** Credentials for the services Clubhouse hosts its rooms and signalling on. */
 export const SERVICES = Object.freeze({
@@ -64,6 +96,8 @@ export function buildHeaders({ deviceId, userId, authToken, locale = "en_US", la
 		"CH-Locale": locale,
 		"CH-AppVersion": APP_IDENTITY.appVersion,
 		"CH-AppBuild": APP_IDENTITY.appBuild,
+		// Sent by real clients. Harmless, and one less way to look synthetic.
+		"ch-keyboards": language.replace("-", "_"),
 		"CH-DeviceId": deviceId || "(null)",
 		"CH-UserID": userId == null ? "(null)" : String(userId),
 		Accept: "application/json",

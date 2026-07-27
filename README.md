@@ -86,6 +86,25 @@ Sign-in took four fixes to get working, recorded here so nobody repeats them:
 If sign-in fails, `npm run doctor` reports whether the API still accepts this
 client's identity.
 
+### When no code arrives
+
+Clubhouse can answer `success: true, is_blocked: false, error_message: null`
+and still send nothing. No field reports it, so the only way to tell is that no
+text turns up. When that happens the identity is the first thing to vary:
+
+```sh
+CLUBHOUSE_IDENTITY=clubdeck-ua npm start -- --verbose   # build in the User-Agent
+CLUBHOUSE_IDENTITY=android npm start -- --verbose       # a later Android build
+```
+
+The sets live in `src/shared/profile.js`. "Call me instead" on the code screen
+uses a different delivery path (`/call_phone_number_auth`), so it is worth
+trying — if the call arrives when the text does not, the account and the
+request are fine and only SMS delivery is being dropped.
+
+Requesting codes repeatedly makes this worse, not better; Clubhouse throttles
+by number. Leave twenty minutes between rounds of testing.
+
 ## Verbose logging
 
 Off by default. Turned on, it echoes the renderer's console to your terminal
