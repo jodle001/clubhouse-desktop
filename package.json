@@ -16,7 +16,7 @@
   },
   "scripts": {
     "dev": "electron-vite dev",
-    "start": "electron-vite build && electron-vite preview",
+    "start": "node scripts/start.js",
     "build": "electron-vite build",
     "test": "vitest run",
     "test:watch": "vitest",

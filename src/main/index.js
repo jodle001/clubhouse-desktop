@@ -6,7 +6,15 @@ import { Settings } from "./settings.js";
 import { registerIpc } from "./ipc.js";
 import { buildMenu } from "./menu.js";
 
-const VERBOSE = process.argv.includes("--verbose");
+// Echo the renderer's console to this terminal and log every API request, with
+// credentials redacted. Off by default. Either:
+//   npm start -- --verbose
+//   CLUBHOUSE_VERBOSE=1 npm run dev
+const VERBOSE = process.argv.includes("--verbose") || Boolean(process.env.CLUBHOUSE_VERBOSE);
+
+if (VERBOSE) {
+	console.log("[verbose] on - logging renderer console and API calls, tokens redacted");
+}
 
 /**
  * Chromium's seccomp policy in older builds predates clone3(), which glibc
@@ -71,9 +79,8 @@ function createWindow(settings) {
 	});
 
 	if (VERBOSE) {
-		const levels = ["debug", "info", "warning", "error"];
-		win.webContents.on("console-message", (_event, level, message, line, source) => {
-			console.log(`[renderer:${levels[level] || level}] ${message}  (${source}:${line})`);
+		win.webContents.on("console-message", ({ level, message, lineNumber, sourceId }) => {
+			console.log(`[renderer:${level}] ${message}  (${sourceId}:${lineNumber})`);
 		});
 		win.webContents.on("render-process-gone", (_event, details) =>
 			console.log("[renderer gone]", JSON.stringify(details))

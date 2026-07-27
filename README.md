@@ -84,8 +84,22 @@ Sign-in took four fixes to get working, recorded here so nobody repeats them:
    required exactly four and did nothing otherwise.
 
 If sign-in fails, `npm run doctor` reports whether the API still accepts this
-client's identity, and `npm start -- --verbose` logs every request with
-credentials redacted.
+client's identity.
+
+## Verbose logging
+
+Off by default. Turned on, it echoes the renderer's console to your terminal
+and logs every API call — method, endpoint, and result. Auth tokens are
+replaced with `<redacted>`, but your phone number will appear, so take care
+with screenshots.
+
+```sh
+npm start -- --verbose        # build and run
+CLUBHOUSE_VERBOSE=1 npm run dev
+```
+
+`npm run dev` needs the environment variable rather than the flag: its CLI
+parses its own arguments and rejects unknown ones.
 
 ## Licence
 
