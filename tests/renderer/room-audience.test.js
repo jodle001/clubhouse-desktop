@@ -37,7 +37,16 @@ function makeRoom() {
 function joinWith(users) {
 	bridge.api.joinChannel = vi.fn().mockResolvedValue({
 		ok: true,
-		data: { success: true, channel: "C1", channel_id: 1, users, user_capabilities: {} }
+		// user_profile_id is how the room knows which of these people is you;
+		// the real API always sends it.
+		data: {
+			success: true,
+			channel: "C1",
+			channel_id: 1,
+			user_profile_id: 9,
+			users,
+			user_capabilities: {}
+		}
 	});
 }
 
@@ -122,7 +131,7 @@ describe("the audience, grouped the way the phone app groups it", () => {
 
 describe("being invited to speak", () => {
 	beforeEach(() => {
-		bridge.api.acceptSpeakerInvite = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+		bridge.api.becomeSpeaker = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
 		bridge.api.raiseHand = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
 	});
 
@@ -170,7 +179,7 @@ describe("being invited to speak", () => {
 
 		await expect(room.acceptInvite()).resolves.toBe(true);
 
-		expect(bridge.api.acceptSpeakerInvite).toHaveBeenCalledWith("C1", 9);
+		expect(bridge.api.becomeSpeaker).toHaveBeenCalledWith("C1");
 		expect(room.speakers.value.map(u => u.user_id)).toContain(9);
 		expect(room.invite.value).toBeNull();
 	});
@@ -194,7 +203,7 @@ describe("being invited to speak", () => {
 		await room.join("C1", { userId: 9 });
 		room._events.deliver(inviteEvent);
 
-		bridge.api.acceptSpeakerInvite = vi
+		bridge.api.becomeSpeaker = vi
 			.fn()
 			.mockResolvedValue({ ok: false, error: { message: "Nope", status: 400 } });
 
@@ -212,7 +221,7 @@ describe("being invited to speak", () => {
 		room.declineInvite();
 
 		expect(room.invite.value).toBeNull();
-		expect(bridge.api.acceptSpeakerInvite).not.toHaveBeenCalled();
+		expect(bridge.api.becomeSpeaker).not.toHaveBeenCalled();
 	});
 
 	it("forgets an unanswered invitation on leaving", async () => {
@@ -279,7 +288,7 @@ describe("an invitation that predates this session", () => {
 				user_capabilities: {}
 			}
 		});
-		bridge.api.acceptSpeakerInvite = vi.fn().mockResolvedValue({
+		bridge.api.becomeSpeaker = vi.fn().mockResolvedValue({
 			ok: false,
 			error: { message: "Clubhouse returned HTTP 404", status: 404 }
 		});
@@ -289,5 +298,98 @@ describe("an invitation that predates this session", () => {
 
 		await expect(room.acceptInvite()).resolves.toBe(false);
 		expect(room.invite.value.error).toMatch(/404/);
+	});
+});
+
+describe("the audio role follows the stage", () => {
+	/**
+	 * Agora's live mode starts everybody as audience, and audience cannot
+	 * publish. Getting the role wrong means a microphone that looks live and
+	 * is silent - the same invisible failure as the dropped invitation.
+	 */
+	let audio;
+
+	function makeRoomWithAudio() {
+		const room = useRoom({
+			makeAudio: async () => {
+				audio = new FakeAudioEngine();
+				return audio;
+			},
+			makeEvents: async () => {
+				events = new FakeRoomEvents();
+				return events;
+			}
+		});
+
+		Object.defineProperty(room, "_events", { get: () => events });
+		return room;
+	}
+
+	const roleCalls = () => audio.calls.filter(([name]) => name === "setRole").map(([, role]) => role);
+
+	beforeEach(() => {
+		bridge.api.becomeSpeaker = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+	});
+
+	it("stays audience for a listener", async () => {
+		joinWith([person(9)]);
+		const room = makeRoomWithAudio();
+		await room.join("C1", { userId: 9 });
+
+		expect(roleCalls()).toEqual([]);
+		expect(audio.role()).toBe("audience");
+	});
+
+	it("takes the host role when joining as a speaker already", async () => {
+		joinWith([person(9, { is_speaker: true })]);
+		const room = makeRoomWithAudio();
+		await room.join("C1", { userId: 9 });
+
+		expect(roleCalls()).toContain("host");
+	});
+
+	it("takes the host role on accepting an invitation", async () => {
+		joinWith([person(9)]);
+		const room = makeRoomWithAudio();
+		await room.join("C1", { userId: 9 });
+
+		room._events.deliver({ action: "invite_speaker", channel: "C1", from_name: "Mod", from_user_id: 1 });
+		await room.acceptInvite();
+
+		expect(roleCalls()).toContain("host");
+	});
+
+	it("takes the host role when a moderator adds you directly", async () => {
+		joinWith([person(9)]);
+		const room = makeRoomWithAudio();
+		await room.join("C1", { userId: 9 });
+
+		room._events.deliver({ action: "add_speaker", channel: "C1", user_id: 9 });
+		await new Promise(resolve => setTimeout(resolve, 0));
+
+		expect(roleCalls()).toContain("host");
+	});
+
+	it("ignores somebody else being added", async () => {
+		joinWith([person(9), person(5)]);
+		const room = makeRoomWithAudio();
+		await room.join("C1", { userId: 9 });
+
+		room._events.deliver({ action: "add_speaker", channel: "C1", user_id: 5 });
+		await new Promise(resolve => setTimeout(resolve, 0));
+
+		expect(roleCalls()).toEqual([]);
+	});
+
+	it("drops back to audience and mutes when taken off stage", async () => {
+		joinWith([person(9, { is_speaker: true })]);
+		const room = makeRoomWithAudio();
+		await room.join("C1", { userId: 9 });
+
+		room._events.deliver({ action: "remove_speaker", channel: "C1", user_id: 9 });
+		await new Promise(resolve => setTimeout(resolve, 0));
+
+		expect(roleCalls().at(-1)).toBe("audience");
+		expect(room.muted.value).toBe(true);
 	});
 });

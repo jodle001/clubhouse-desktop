@@ -119,8 +119,12 @@ export const endpoints = {
 	uninviteSpeaker: (c, channel, userId) =>
 		c.request("/uninvite_speaker", { body: { channel, user_id: userId } }),
 
-	acceptSpeakerInvite: (c, channel, userId) =>
-		c.request("/accept_speaker_invite", { body: { channel, user_id: userId } }),
+	/**
+	 * Step onto the stage after a moderator invites you. Not
+	 * /accept_speaker_invite - that is retired (404). This one named `channel`
+	 * itself on a 400, and it is about you, so it takes no user id.
+	 */
+	becomeSpeaker: (c, channel) => c.request("/become_speaker", { body: { channel } }),
 
 	makeModerator: (c, channel, userId) =>
 		c.request("/make_moderator", { body: { channel, user_id: userId } }),

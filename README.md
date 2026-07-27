@@ -147,7 +147,8 @@ routed at all.
 | `/get_profile`, `/search_users` | fine |
 | `POST /block`, `POST /unblock` | alive - `{ user_id }` |
 | `/audience_reply` | alive - raising a hand |
-| `/accept_speaker_invite` | gone, no replacement found yet |
+| `POST /become_speaker` | alive - `{ channel }`, take the stage |
+| `/accept_speaker_invite` | gone, replaced by `/become_speaker` |
 | `POST /get_blocked_users` | alive |
 | `POST /send_channel_message` | alive - `{ channel, message }` |
 | `GET /get_channel_messages` | alive - chat history, `?channel=` |
@@ -165,6 +166,13 @@ also exists but rejects every shape tried with an empty `error_message`, while
 `/get_channel_messages` names what it wants - and pairs with
 `/send_channel_message`. An endpoint that says what is missing is worth more
 than one that only says no.
+
+Going on stage takes two steps, not one. `/become_speaker` is the Clubhouse
+half; the other is Agora's, because the client runs in `live` mode where
+everybody starts as `audience` and an audience member cannot publish. Without
+`setClientRole("host")` the microphone button would work and nobody would hear
+anything. The room keeps the two in step, in both directions - being removed
+from stage mutes and drops back to audience.
 
 PubNub carries more than chat. `invite_speaker` is how a moderator offers you
 the stage, and `channel_message_like_count_update` is somebody liking a message.

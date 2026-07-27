@@ -44,7 +44,7 @@ const API_METHODS = [
 	// moderation
 	"inviteSpeaker",
 	"uninviteSpeaker",
-	"acceptSpeakerInvite",
+	"becomeSpeaker",
 	"makeModerator",
 	"muteSpeaker",
 	"blockFromChannel",

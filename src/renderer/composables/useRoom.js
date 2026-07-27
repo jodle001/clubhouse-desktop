@@ -214,6 +214,11 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			});
 			muted.value = audio.isMuted();
 
+			// Already on stage, so publish rights are needed from the start.
+			if ((info.users || []).find(u => u.user_id === info.user_profile_id)?.is_speaker) {
+				await audio.setRole("host");
+			}
+
 			audio.on("speaking", list => {
 				speakingUids.value = new Set(list.map(entry => Number(entry.uid)));
 			});
@@ -227,8 +232,26 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 
 			events.on("join_channel", message => upsertUser(message.user_profile));
 			events.on("leave_channel", message => removeUser(message.user_id));
-			events.on("add_speaker", message => patchUser(message.user_id, { is_speaker: true }));
-			events.on("remove_speaker", message => patchUser(message.user_id, { is_speaker: false }));
+			events.on("add_speaker", async message => {
+				patchUser(message.user_id, { is_speaker: true });
+
+				if (message.user_id === info.user_profile_id) {
+					await audio?.setRole("host");
+					invite.value = null;
+				}
+			});
+
+			events.on("remove_speaker", async message => {
+				patchUser(message.user_id, { is_speaker: false });
+
+				// Taken off stage: drop back to audience and stop publishing,
+				// rather than holding a live microphone nobody can hear.
+				if (message.user_id === info.user_profile_id) {
+					await audio?.setMuted(true);
+					await audio?.setRole("audience");
+					muted.value = true;
+				}
+			});
 			events.on("make_moderator", message => patchUser(message.user_id, { is_moderator: true }));
 			events.on("raise_hands", message => patchUser(message.user_id, { hand_raised: true }));
 			events.on("unraise_hands", message => patchUser(message.user_id, { hand_raised: false }));
@@ -342,8 +365,14 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		const meId = info.user_profile_id;
 
 		try {
-			await call("acceptSpeakerInvite", info.channel, meId);
+			await call("becomeSpeaker", info.channel);
 			patchUser(meId, { is_speaker: true });
+
+			// Agora's live mode starts everybody as audience, which cannot
+			// publish - so without this the microphone would stay silent no
+			// matter what the button said.
+			await audio?.setRole("host");
+
 			handRaised.value = false;
 			invite.value = null;
 			return true;

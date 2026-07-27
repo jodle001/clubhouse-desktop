@@ -70,6 +70,20 @@ export class NullAudioEngine extends Emitter {
 		this.emit("muted", { muted: this._muted });
 	}
 
+	/**
+	 * Speaker or listener. Agora's live mode starts everybody as audience, and
+	 * an audience member cannot publish - so being promoted to speaker means
+	 * nothing until the role changes too.
+	 */
+	async setRole(role) {
+		this._role = role;
+		this.log(`[audio:${this.name}] role ${role}`);
+	}
+
+	role() {
+		return this._role || "audience";
+	}
+
 	isMuted() {
 		return this._muted;
 	}
@@ -94,6 +108,11 @@ export class FakeAudioEngine extends NullAudioEngine {
 	async join(opts) {
 		this.calls.push(["join", opts]);
 		return super.join(opts);
+	}
+
+	async setRole(role) {
+		this.calls.push(["setRole", role]);
+		return super.setRole(role);
 	}
 
 	async leave() {
@@ -156,6 +175,16 @@ export class AgoraAudioEngine extends Emitter {
 		await this._client.join(appId, channel, token || null, uid);
 		this._joined = channel;
 		this.emit("joined", { channel });
+	}
+
+	async setRole(role) {
+		this._role = role;
+		await this._client?.setClientRole(role === "host" ? "host" : "audience");
+		this.log(`[audio:agora] role ${role}`);
+	}
+
+	role() {
+		return this._role || "audience";
 	}
 
 	async setMuted(muted) {
