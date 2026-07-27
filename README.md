@@ -44,12 +44,34 @@ unprivileged user namespaces disabled. Either re-enable them
 (`sudo sysctl -w kernel.unprivileged_userns_clone=1`) or start with
 `npm start -- --no-sandbox`.
 
+# The app identity this client presents
+
+This client talks to Clubhouse's *private* mobile API, and identifies itself as
+an iOS build via `CH-AppVersion` / `CH-AppBuild` headers. Those headers live in
+one place, `app/profile.mjs`.
+
+The project originally sent build 304 (0.1.28, March 2021). Asked about that
+build, the API replies:
+
+```json
+{"success":true,"has_update":true,"is_mandatory":true,
+ "app_version":"23.09.01 (2446)","app_build":2446}
+```
+
+i.e. it flags build 304 as needing a *mandatory* upgrade. `app/profile.mjs`
+therefore now sends build 2446 (23.09.01) - the newest build the API itself
+reports as current. Only the four identity fields were changed; the Agora and
+PubNub keys are deliberately left alone, since there is no evidence about what
+the current app uses and guessing would break what still works.
+
+Note that `check_for_update` is unauthenticated, so a clean answer there does
+not prove the auth endpoints accept this build. Editing `app/profile.mjs` is
+the place to try other values.
+
 # Checking whether the backend still answers
 
-This client talks to Clubhouse's *private* mobile API using the request headers
-of the March 2021 iOS build (app build 304). That API is not public and is not
-versioned for third parties, so it can start rejecting this client at any time
-without the app itself changing.
+That API is not public and is not versioned for third parties, so it can start
+rejecting this client at any time without the app itself changing.
 
 To check where you stand before debugging anything else:
 

@@ -4,8 +4,8 @@
 /**
  * Environment + backend check for the unofficial Clubhouse desktop client.
  *
- * The client talks to Clubhouse's private mobile API using the headers of the
- * March 2021 iOS build (app build 304). That API is not public and is not
+ * The client talks to Clubhouse's private mobile API, identifying itself with
+ * the build headers in app/profile.mjs. That API is not public and is not
  * versioned for third parties, so the most useful thing this script can tell
  * you is whether the endpoints the app depends on still answer today.
  *
@@ -15,14 +15,22 @@
 const https = require("https");
 const http = require("http");
 const { URL } = require("url");
+const path = require("path");
+const { pathToFileURL } = require("url");
 
-const PROFILE = {
-	// Overridable so the script can be pointed at a stub while testing it.
-	apiRoot: process.env.CLUBHOUSE_API_ROOT || "https://www.clubhouseapi.com/api",
-	userAgent: "clubhouse/304 (iPhone; iOS 14.4; Scale/2.00)",
-	appVersion: "0.1.28",
-	appBuild: "304"
-};
+// Filled in from app/profile.mjs so the script always probes with the same
+// identity the app itself sends.
+let PROFILE = null;
+
+async function loadProfile() {
+	const file = path.join(__dirname, "..", "app", "profile.mjs");
+	const mod = await import(pathToFileURL(file).href);
+	return {
+		...mod.default,
+		// Overridable so the script can be pointed at a stub while testing it.
+		apiRoot: process.env.CLUBHOUSE_API_ROOT || mod.default.apiRoot
+	};
+}
 
 const TIMEOUT_MS = 15000;
 
@@ -83,6 +91,8 @@ function heading(text) {
 }
 
 (async () => {
+	PROFILE = await loadProfile();
+
 	heading("Environment");
 	console.log(`node      ${process.version}`);
 	console.log(`platform  ${process.platform} ${process.arch}`);
@@ -94,7 +104,9 @@ function heading(text) {
 
 	heading("Clubhouse API reachability");
 	console.log(`endpoint  ${PROFILE.apiRoot}/check_for_update`);
-	console.log(`sending   CH-AppBuild: ${PROFILE.appBuild} (March 2021 iOS build)\n`);
+	console.log(
+		`sending   CH-AppBuild: ${PROFILE.appBuild}  CH-AppVersion: ${PROFILE.appVersion}\n`
+	);
 
 	const result = await request("/check_for_update?is_testflight=0");
 
@@ -143,6 +155,15 @@ function heading(text) {
 				);
 			}
 
+			if (String(parsed.app_build) === String(PROFILE.appBuild)) {
+				console.log(
+					"\nNote that this client already sends the build the API calls current,\n" +
+						"and the API still demands an upgrade. check_for_update is therefore\n" +
+						"not a header check we can satisfy - treat it as informational only."
+				);
+				return;
+			}
+
 			// Ask again as the build the API just told us is current. This is a
 			// read-only probe - it only reveals whether the upgrade demand tracks
 			// the build headers at all.
@@ -186,8 +207,8 @@ function heading(text) {
 	} else if (result.status === 401 || result.status === 403) {
 		console.log(
 			"\nThe API rejected this app build. Clubhouse is refusing requests that\n" +
-				"identify as build 304, so signing in through this client will not work\n" +
-				"without updating the profile in clubhouse-api to a current build."
+				`identify as build ${PROFILE.appBuild}, so signing in through this client\n` +
+				"will not work without further changes to app/profile.mjs."
 		);
 		process.exitCode = 1;
 	} else if (result.status === 426 || /update/i.test(result.body)) {

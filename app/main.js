@@ -5,6 +5,7 @@ const VueToaster = require("vue-toastr");
 const store = require("store");
 const ClubHouseApi = require("clubhouse-api");
 const ua = require("universal-analytics");
+import AppProfile from "./profile.mjs";
 
 import Login from "./views/login.js";
 import Home from "./views/home.js";
@@ -143,7 +144,7 @@ const app = new Vue({
 		refreshToken: async function() {
 			const userData = store.get("userData");
 			const profile = {
-				...ClubHouseApi.profiles.application.a304,
+				...AppProfile,
 				...ClubHouseApi.profiles.locales.English
 			};
 			const result = await ClubHouseApi.api.refreshToken(

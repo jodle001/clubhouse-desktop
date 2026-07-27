@@ -1,5 +1,6 @@
 const ClubHouseApi = require('clubhouse-api');
 const store = require('store');
+import AppProfile from "../profile.mjs";
 
 const Notifications = {
     mounted:function(){
@@ -16,7 +17,7 @@ const Notifications = {
             const userData = store.get('userData');
             console.log(userData);
             const profiles = {
-                ...ClubHouseApi.profiles.application.a304,
+                ...AppProfile,
                 ...ClubHouseApi.profiles.locales.English,
                 userId: userData.user_profile.user_id,
                 token: userData.auth_token

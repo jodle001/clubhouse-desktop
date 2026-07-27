@@ -1,5 +1,6 @@
 const ClubHouseApi = require('clubhouse-api');
 const store = require('store');
+import AppProfile from "../profile.mjs";
 
 const EditProfile = {
     mounted:function(){
@@ -17,7 +18,7 @@ const EditProfile = {
         updateName: async function(){
             if(this.firstName.length && this.lastName.length && this.username.length && this.username.length <= 16){
                 const profile = {
-                    ...ClubHouseApi.profiles.application.a304,
+                    ...AppProfile,
                     ...ClubHouseApi.profiles.locales.English,
                     userId: this.userData.user_profile.user_id,
                     token: this.userData.auth_token
@@ -46,7 +47,7 @@ const EditProfile = {
         updateUsername: async function(){
             if(this.username.length && this.username.length <= 16){
                 const profile = {
-                    ...ClubHouseApi.profiles.application.a304,
+                    ...AppProfile,
                     ...ClubHouseApi.profiles.locales.English,
                     userId: this.userData.user_profile.user_id,
                     token: this.userData.auth_token

@@ -1,5 +1,6 @@
 const ClubHouseApi = require("clubhouse-api");
 const store = require("store");
+import AppProfile from "../profile.mjs";
 
 const THEME_AUTO = "auto";
 const THEME_LIGHT = "light";
@@ -41,7 +42,7 @@ const Home = {
   mounted: function() {
     if (this.userData) {
       this.reqProfile = {
-        ...ClubHouseApi.profiles.application.a304,
+        ...AppProfile,
         ...ClubHouseApi.profiles.locales.English,
         userId: this.userData.user_profile.user_id,
         token: this.userData.auth_token,

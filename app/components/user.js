@@ -1,6 +1,7 @@
 const Vue = require('vue/dist/vue.js');
 const ClubHouseApi = require('clubhouse-api');
 const store = require('store');
+import AppProfile from "../profile.mjs";
 
 const user = Vue.component('user',{
     props:['user','isModerator','channel','isSpeaker'],
@@ -34,7 +35,7 @@ const user = Vue.component('user',{
             this.dropdownOpen = false;
             const userData = store.get('userData');
             const profile = {
-                ...ClubHouseApi.profiles.application.a304,
+                ...AppProfile,
                 ...ClubHouseApi.profiles.locales.English,
                 userId: userData.user_profile.user_id,
                 token: userData.auth_token
@@ -54,7 +55,7 @@ const user = Vue.component('user',{
             this.speakerDropdown = false;
             const userData = store.get('userData');
             const profile = {
-                ...ClubHouseApi.profiles.application.a304,
+                ...AppProfile,
                 ...ClubHouseApi.profiles.locales.English,
                 userId: userData.user_profile.user_id,
                 token: userData.auth_token
@@ -73,7 +74,7 @@ const user = Vue.component('user',{
             this.dropdownOpen = false;
             const userData = store.get('userData');
             const profile = {
-                ...ClubHouseApi.profiles.application.a304,
+                ...AppProfile,
                 ...ClubHouseApi.profiles.locales.English,
                 userId: userData.user_profile.user_id,
                 token: userData.auth_token
@@ -96,7 +97,7 @@ const user = Vue.component('user',{
             this.dropdownOpen = false;
             const userData = store.get('userData');
             const profile = {
-                ...ClubHouseApi.profiles.application.a304,
+                ...AppProfile,
                 ...ClubHouseApi.profiles.locales.English,
                 userId: userData.user_profile.user_id,
                 token: userData.auth_token
@@ -115,7 +116,7 @@ const user = Vue.component('user',{
             this.dropdownOpen = false;
             const userData = store.get('userData');
             const profile = {
-                ...ClubHouseApi.profiles.application.a304,
+                ...AppProfile,
                 ...ClubHouseApi.profiles.locales.English,
                 userId: userData.user_profile.user_id,
                 token: userData.auth_token

@@ -1,5 +1,6 @@
 const ClubHouseApi = require('clubhouse-api');
 const store = require('store');
+import AppProfile from "../profile.mjs";
 
 const userData = store.get('userData');
 
@@ -18,7 +19,7 @@ const Event = {
     methods:{
         getClub: async function(){
             const profiles = {
-                ...ClubHouseApi.profiles.application.a304,
+                ...AppProfile,
                 ...ClubHouseApi.profiles.locales.English,
                 userId: userData.user_profile.user_id,
                 token: userData.auth_token

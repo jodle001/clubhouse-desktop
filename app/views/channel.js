@@ -4,6 +4,7 @@ const uuid = require("uuid");
 const PubNub = require("pubnub");
 const toastr = require("toastr");
 // const AgoraRTM = require('agora-rtm-sdk');
+import AppProfile from "../profile.mjs";
 
 // let rtmClient = null;
 
@@ -33,7 +34,7 @@ const Channel = {
 	mounted: function() {
 		if (this.userData) {
 			this.reqProfile = {
-				...ClubHouseApi.profiles.application.a304,
+				...AppProfile,
 				...ClubHouseApi.profiles.locales.English,
 				userId: this.userData.user_profile.user_id,
 				token: this.userData.auth_token
@@ -107,7 +108,7 @@ const Channel = {
 		activePing: async function() {
 			const userData = store.get("userData");
 			const profiles = {
-				...ClubHouseApi.profiles.application.a304,
+				...AppProfile,
 				...ClubHouseApi.profiles.locales.English,
 				userId: userData.user_profile.user_id,
 				token: userData.auth_token
@@ -119,7 +120,7 @@ const Channel = {
 			const $this = this;
 			const userData = store.get("userData");
 			const profiles = {
-				...ClubHouseApi.profiles.application.a304,
+				...AppProfile,
 				...ClubHouseApi.profiles.locales.English,
 				userId: userData.user_profile.user_id,
 				token: userData.auth_token
@@ -184,8 +185,8 @@ const Channel = {
 			const userData = store.get("userData");
 			if (!pubnub) {
 				pubnub = new PubNub({
-					publishKey: ClubHouseApi.profiles.application.a304.pubnubPubKey,
-					subscribeKey: ClubHouseApi.profiles.application.a304.pubnubSubKey,
+					publishKey: AppProfile.pubnubPubKey,
+					subscribeKey: AppProfile.pubnubSubKey,
 					uuid: userData.user_profile.user_id,
 					origin: this.channel.pubnub_origin,
 					authKey: this.channel.pubnub_token,
@@ -346,7 +347,7 @@ const Channel = {
 			console.log("invite");
 			const userData = store.get("userData");
 			const profiles = {
-				...ClubHouseApi.profiles.application.a304,
+				...AppProfile,
 				...ClubHouseApi.profiles.locales.English,
 				userId: userData.user_profile.user_id,
 				token: userData.auth_token
@@ -402,7 +403,7 @@ const Channel = {
 			const userData = store.get("userData");
 			if (!rtmClient) {
 				rtmClient = AgoraRTM.createInstance(
-					ClubHouseApi.profiles.application.a304.agoraKey
+					AppProfile.agoraKey
 				);
 				rtmClient
 					.login({
@@ -588,7 +589,7 @@ const Channel = {
 			client.leave();
 			pubnub.unsubscribeAll();
 			const profiles = {
-				...ClubHouseApi.profiles.application.a304,
+				...AppProfile,
 				...ClubHouseApi.profiles.locales.English,
 				userId: userData.user_profile.user_id,
 				token: userData.auth_token
@@ -633,7 +634,7 @@ const Channel = {
 		},
 		inviteSpeaker: async function(userId) {
 			const profile = {
-				...ClubHouseApi.profiles.application.a304,
+				...AppProfile,
 				...ClubHouseApi.profiles.locales.English,
 				userId: this.userData.user_profile.user_id,
 				token: this.userData.auth_token
@@ -653,7 +654,7 @@ const Channel = {
 		},
 		handRaise: async function() {
 			const profiles = {
-				...ClubHouseApi.profiles.application.a304,
+				...AppProfile,
 				...ClubHouseApi.profiles.locales.English,
 				userId: this.userData.user_profile.user_id,
 				token: this.userData.auth_token
@@ -854,7 +855,7 @@ const Channel = {
 					if (!this.loading) {
 						const userData = store.get("userData");
 						const profiles = {
-							...ClubHouseApi.profiles.application.a304,
+							...AppProfile,
 							...ClubHouseApi.profiles.locales.English,
 							userId: userData.user_profile.user_id,
 							token: userData.auth_token

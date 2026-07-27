@@ -1,5 +1,6 @@
 const ClubHouseApi = require('clubhouse-api');
 const store = require('store');
+import AppProfile from "../profile.mjs";
 
 const UserList = {
     props:['id','type','q'],
@@ -25,7 +26,7 @@ const UserList = {
         getFollowers:async function(){
             const userData = store.get('userData');
             const profile = {
-                ...ClubHouseApi.profiles.application.a304,
+                ...AppProfile,
                 ...ClubHouseApi.profiles.locales.English,
                 userId: userData.user_profile.user_id,
                 token: userData.auth_token
@@ -44,7 +45,7 @@ const UserList = {
         getFollowings:async function(){
             const userData = store.get('userData');
             const profile = {
-                ...ClubHouseApi.profiles.application.a304,
+                ...AppProfile,
                 ...ClubHouseApi.profiles.locales.English,
                 userId: userData.user_profile.user_id,
                 token: userData.auth_token
@@ -64,7 +65,7 @@ const UserList = {
             this.loading = true;
             const userData = store.get('userData');
             const profile = {
-                ...ClubHouseApi.profiles.application.a304,
+                ...AppProfile,
                 ...ClubHouseApi.profiles.locales.English,
                 userId: userData.user_profile.user_id,
                 token: userData.auth_token

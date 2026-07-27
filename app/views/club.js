@@ -1,5 +1,6 @@
 const ClubHouseApi = require('clubhouse-api');
 const store = require('store');
+import AppProfile from "../profile.mjs";
 
 const Club = {
     props:['id'],
@@ -17,7 +18,7 @@ const Club = {
             const userData = store.get('userData');
             this.loading = true;
             const profile = {
-                ...ClubHouseApi.profiles.application.a304,
+                ...AppProfile,
                 ...ClubHouseApi.profiles.locales.English,
                 userId: userData.user_profile.user_id,
                 token: userData.auth_token
@@ -38,7 +39,7 @@ const Club = {
         follow:async function(){
             const userData = store.get('userData');
             const profile = {
-                ...ClubHouseApi.profiles.application.a304,
+                ...AppProfile,
                 ...ClubHouseApi.profiles.locales.English,
                 userId: userData.user_profile.user_id,
                 token: userData.auth_token
@@ -56,7 +57,7 @@ const Club = {
         unfollow:async function(){
             const userData = store.get('userData');
             const profile = {
-                ...ClubHouseApi.profiles.application.a304,
+                ...AppProfile,
                 ...ClubHouseApi.profiles.locales.English,
                 userId: userData.user_profile.user_id,
                 token: userData.auth_token

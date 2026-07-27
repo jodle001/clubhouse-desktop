@@ -2,6 +2,7 @@ const ClubHouseApi = require("clubhouse-api");
 const store = require("store");
 const path = require("path");
 const fs = require("fs");
+import AppProfile from "../profile.mjs";
 
 const User = {
 	props: ["id"],
@@ -43,7 +44,7 @@ const User = {
 			const userData = store.get("userData");
 			this.loading = true;
 			const profile = {
-				...ClubHouseApi.profiles.application.a304,
+				...AppProfile,
 				...ClubHouseApi.profiles.locales.English,
 				userId: userData.user_profile.user_id,
 				token: userData.auth_token
@@ -64,7 +65,7 @@ const User = {
 			const userData = store.get("userData");
 			this.loading = true;
 			const profile = {
-				...ClubHouseApi.profiles.application.a304,
+				...AppProfile,
 				...ClubHouseApi.profiles.locales.English,
 				userId: userData.user_profile.user_id,
 				token: userData.auth_token
@@ -92,7 +93,7 @@ const User = {
 			const userData = store.get("userData");
 			this.loading = true;
 			const profile = {
-				...ClubHouseApi.profiles.application.a304,
+				...AppProfile,
 				...ClubHouseApi.profiles.locales.English,
 				userId: userData.user_profile.user_id,
 				token: userData.auth_token
@@ -111,7 +112,7 @@ const User = {
 		follow: async function() {
 			const userData = store.get("userData");
 			const profile = {
-				...ClubHouseApi.profiles.application.a304,
+				...AppProfile,
 				...ClubHouseApi.profiles.locales.English,
 				userId: userData.user_profile.user_id,
 				token: userData.auth_token
@@ -135,7 +136,7 @@ const User = {
 		unfollow: async function() {
 			const userData = store.get("userData");
 			const profile = {
-				...ClubHouseApi.profiles.application.a304,
+				...AppProfile,
 				...ClubHouseApi.profiles.locales.English,
 				userId: userData.user_profile.user_id,
 				token: userData.auth_token
@@ -172,7 +173,7 @@ const User = {
 			this.loading = true;
 			const userData = store.get("userData");
 			const profile = {
-				...ClubHouseApi.profiles.application.a304,
+				...AppProfile,
 				...ClubHouseApi.profiles.locales.English,
 				userId: userData.user_profile.user_id,
 				token: userData.auth_token
@@ -195,7 +196,7 @@ const User = {
 			this.loading = true;
 			const userData = store.get("userData");
 			const profile = {
-				...ClubHouseApi.profiles.application.a304,
+				...AppProfile,
 				...ClubHouseApi.profiles.locales.English,
 				userId: userData.user_profile.user_id,
 				token: userData.auth_token
@@ -219,7 +220,7 @@ const User = {
 			this.loading = true;
 			const userData = store.get("userData");
 			const profile = {
-				...ClubHouseApi.profiles.application.a304,
+				...AppProfile,
 				...ClubHouseApi.profiles.locales.English,
 				userId: userData.user_profile.user_id,
 				token: userData.auth_token
@@ -244,7 +245,7 @@ const User = {
 			const $this = this;
 			const userData = store.get("userData");
 			const profile = {
-				...ClubHouseApi.profiles.application.a304,
+				...AppProfile,
 				...ClubHouseApi.profiles.locales.English,
 				userId: userData.user_profile.user_id,
 				token: userData.auth_token

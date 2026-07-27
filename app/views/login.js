@@ -1,8 +1,9 @@
 const ClubHouseApi = require('clubhouse-api');
 const store = require('store');
+import AppProfile from "../profile.mjs";
 
 const profiles = {
-    ...ClubHouseApi.profiles.application.a304,
+    ...AppProfile,
     ...ClubHouseApi.profiles.locales.English
 };
 
