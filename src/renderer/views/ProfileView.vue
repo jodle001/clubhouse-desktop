@@ -11,22 +11,48 @@ const { state } = useSession();
 const { run, loading } = useApi();
 const profile = ref(null);
 const busy = ref(false);
+const following = ref(false);
 
 const isMe = computed(
 	() => props.id === "me" || Number(props.id) === state.user?.user_profile?.user_id
 );
 
 async function load() {
-	const result = isMe.value ? await run("me") : await run("getProfile", Number(props.id));
+	if (isMe.value) {
+		const result = await run("me");
+		profile.value = result?.user_profile || null;
+		return;
+	}
+
+	// Whether we follow someone is decided by /me's following_ids, which is the
+	// only authoritative answer available. The old client read
+	// `notification_type === 0` off the profile - that is a notification
+	// setting, not a relationship, so the button could show either label
+	// regardless of the truth and Unfollow could be the first thing offered for
+	// a stranger.
+	const [result, mine] = await Promise.all([
+		run("getProfile", Number(props.id)),
+		run("me")
+	]);
+
 	profile.value = result?.user_profile || null;
+	following.value = Boolean(mine?.following_ids?.includes(Number(props.id)));
 }
 
 async function toggleFollow() {
-	if (!profile.value) return;
+	if (!profile.value) {
+		return;
+	}
+
 	busy.value = true;
-	const method = profile.value.notification_type === 0 ? "follow" : "unfollow";
-	await run(method, profile.value.user_id);
-	await load();
+	const wanted = !following.value;
+	const result = await run(wanted ? "follow" : "unfollow", profile.value.user_id);
+
+	// run() returns null on failure, having already reported it.
+	if (result) {
+		following.value = wanted;
+	}
+
 	busy.value = false;
 }
 
@@ -57,7 +83,7 @@ watch(() => props.id, load);
 			<div class="row profile__actions">
 				<RouterLink v-if="isMe" :to="{ name: 'editProfile' }" class="btn btn-secondary">Edit profile</RouterLink>
 				<button v-else class="btn" :disabled="busy" @click="toggleFollow">
-					{{ profile.notification_type === 0 ? "Follow" : "Following" }}
+					{{ following ? "Following" : "Follow" }}
 				</button>
 			</div>
 		</div>

@@ -41,37 +41,23 @@ export const endpoints = {
 
 	unfollow: (c, userId) => c.request("/unfollow", { body: { user_id: userId } }),
 
-	getFollowing: (c, userId, { page = 1, pageSize = 50 } = {}) =>
-		c.request("/get_following", { query: { user_id: userId, page, page_size: pageSize } }),
-
-	getFollowers: (c, userId, { page = 1, pageSize = 50 } = {}) =>
-		c.request("/get_followers", { query: { user_id: userId, page, page_size: pageSize } }),
-
 	searchUsers: (c, query) =>
 		c.request("/search_users", {
 			body: { query, cofollows_only: false, followers_only: false, following_only: false }
 		}),
 
-	// Retired by Clubhouse: these answer a plain-text 404, meaning the path is
-	// not routed at all. `npm run probe` confirms it. Kept so the views calling
-	// them fail with a clear message rather than "unknown API method", until
-	// each one has a replacement or its screen is removed.
-	getOnlineFriends: c => c.request("/get_online_friends", { body: {} }),
+	// get_online_friends, get_notifications, get_events, get_following and
+	// get_followers used to live here. All retired by Clubhouse - a plain-text
+	// 404, meaning the path is not routed at all - with no replacement found
+	// under any name tried. The screens built on them are gone too. See the
+	// endpoint table in the README, and `npm run probe` to re-check.
 
-	getNotifications: (c, { page = 1, pageSize = 20 } = {}) =>
-		c.request("/get_notifications", { query: { page, page_size: pageSize } }),
-
-	// --- clubs & events -----------------------------------------------
+	// --- clubs --------------------------------------------------------
 	getClub: (c, clubId) => c.request("/get_club", { body: { club_id: clubId } }),
 
 	followClub: (c, clubId) => c.request("/follow_club", { body: { club_id: clubId } }),
 
 	unfollowClub: (c, clubId) => c.request("/unfollow_club", { body: { club_id: clubId } }),
-
-	getEvents: (c, { page = 1, pageSize = 25 } = {}) =>
-		c.request("/get_events", { query: { page, page_size: pageSize } }),
-
-	getEvent: (c, eventHashid) => c.request("/get_event", { body: { event_hashid: eventHashid } }),
 
 	// --- rooms --------------------------------------------------------
 	/**

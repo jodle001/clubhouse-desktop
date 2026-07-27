@@ -6,6 +6,8 @@ const DEFAULTS = {
 	filterNonLatinRooms: false,
 	/** Audio is opt-in: see src/renderer/audio for why. */
 	audioEnabled: false,
+	/** Whether the room's chat panel is open. Remembered between rooms. */
+	chatOpen: true,
 	windowState: { width: 1100, height: 800, maximized: false }
 };
 

@@ -158,9 +158,10 @@ author inline. History is the one gap: `/get_chat_messages` exists but answers
 400 with an empty `error_message` for every parameter tried, so you see the
 conversation from the moment you walk in and not before.
 
-Screens still built on retired endpoints - notifications, followers and
-following, events - will report the 404. They need either a replacement endpoint
-or removing.
+The screens built on retired endpoints have been removed rather than left to
+report a 404: notifications, the followers and following lists, and events. The
+follower counts remain on a profile as plain text, since `/get_profile` still
+returns them - there is just no way to list the people any more.
 
 `npm run probe` asks the live API what it still serves, using your signed-in
 session and the app's own headers, so a result there means the same thing inside

@@ -1,0 +1,129 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mount } from "@vue/test-utils";
+import RoomView from "@/views/RoomView.vue";
+import { stubBridge } from "../setup.js";
+import { sessionState } from "@/composables/useSession.js";
+
+vi.mock("vue-router", () => ({
+	useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+	useRoute: () => ({})
+}));
+
+const joinResult = (overrides = {}) => ({
+	success: true,
+	channel: "C1",
+	channel_id: 1,
+	topic: "God & Philosophy",
+	user_profile_id: 7,
+	users: [{ user_id: 7, name: "Me", is_speaker: true }],
+	is_room_chat_available: true,
+	is_chat_enabled: true,
+	user_capabilities: { can_post_to_chat: true },
+	...overrides
+});
+
+let bridge;
+
+beforeEach(() => {
+	// Session state is a module singleton, so a setting saved by one test is
+	// still there for the next one - which is correct in the app and wrong in
+	// a test.
+	sessionState.settings = {};
+
+	bridge = stubBridge();
+	bridge.api.joinChannel = vi.fn().mockResolvedValue({ ok: true, data: joinResult() });
+	bridge.api.leaveChannel = vi.fn().mockResolvedValue({ ok: true, data: {} });
+	// The real handler answers with the whole settings object.
+	bridge.settings.set = vi.fn(patch => Promise.resolve({ ...patch }));
+});
+
+function mountRoom() {
+	return mount(RoomView, { props: { channel: "C1" }, global: { stubs: { RouterLink: true } } });
+}
+
+/**
+ * join() awaits the API, the audio engine and the events adapter in turn, so
+ * one microtask tick is not enough for the room to be on screen.
+ */
+async function settle(wrapper) {
+	await new Promise(resolve => setTimeout(resolve, 50));
+	await wrapper.vm.$nextTick();
+}
+
+describe("RoomView chat panel", () => {
+	it("puts chat in an aside beside the room, not below it", async () => {
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		expect(wrapper.find(".room__main").exists()).toBe(true);
+		expect(wrapper.find(".room__aside").exists()).toBe(true);
+		expect(wrapper.find(".room__panel").exists()).toBe(true);
+	});
+
+	it("opens by default and says so", async () => {
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		expect(wrapper.find(".room__tab").attributes("aria-expanded")).toBe("true");
+		expect(wrapper.find(".room").classes()).toContain("room--chat-open");
+	});
+
+	it("collapses and reopens from the tab", async () => {
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		await wrapper.find(".room__tab").trigger("click");
+		expect(wrapper.find(".room__tab").attributes("aria-expanded")).toBe("false");
+		expect(wrapper.find(".room").classes()).not.toContain("room--chat-open");
+
+		await wrapper.find(".room__tab").trigger("click");
+		expect(wrapper.find(".room__tab").attributes("aria-expanded")).toBe("true");
+		expect(wrapper.find(".room").classes()).toContain("room--chat-open");
+	});
+
+	it("leaves the tab reachable while collapsed", async () => {
+		// Collapsing must not hide the only way back.
+		const wrapper = mountRoom();
+		await settle(wrapper);
+		await wrapper.find(".room__tab").trigger("click");
+
+		expect(wrapper.find(".room__tab").exists()).toBe(true);
+		expect(wrapper.find(".room__aside").classes()).toContain("room__aside--closed");
+	});
+
+	it("remembers the choice", async () => {
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		await wrapper.find(".room__tab").trigger("click");
+		expect(bridge.settings.set).toHaveBeenCalledWith({ chatOpen: false });
+
+		await wrapper.find(".room__tab").trigger("click");
+		expect(bridge.settings.set).toHaveBeenLastCalledWith({ chatOpen: true });
+	});
+
+	it("shows no chat furniture at all in a room without chat", async () => {
+		bridge.api.joinChannel = vi
+			.fn()
+			.mockResolvedValue({ ok: true, data: joinResult({ is_room_chat_available: false }) });
+
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		expect(wrapper.find(".room__aside").exists()).toBe(false);
+		expect(wrapper.find(".room__tab").exists()).toBe(false);
+	});
+
+	it("shows the panel but no composer when posting is not allowed", async () => {
+		bridge.api.joinChannel = vi.fn().mockResolvedValue({
+			ok: true,
+			data: joinResult({ user_capabilities: { can_post_to_chat: false } })
+		});
+
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		expect(wrapper.find(".room__panel").exists()).toBe(true);
+		expect(wrapper.find(".room__compose").exists()).toBe(false);
+	});
+});

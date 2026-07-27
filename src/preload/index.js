@@ -23,17 +23,11 @@ const API_METHODS = [
 	// social
 	"follow",
 	"unfollow",
-	"getFollowing",
-	"getFollowers",
 	"searchUsers",
-	"getOnlineFriends",
-	"getNotifications",
 	// clubs & events
 	"getClub",
 	"followClub",
 	"unfollowClub",
-	"getEvents",
-	"getEvent",
 	// rooms
 	"getFeed",
 	"joinChannel",
