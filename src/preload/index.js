@@ -37,7 +37,6 @@ const API_METHODS = [
 	// rooms
 	"getFeed",
 	"joinChannel",
-	"getChatMessages",
 	"sendChatMessage",
 	"leaveChannel",
 	"activePing",

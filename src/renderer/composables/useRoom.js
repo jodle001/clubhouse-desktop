@@ -21,33 +21,45 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 	let audio = null;
 	let events = null;
 	let pingTimer = null;
-	let chatTimer = null;
 
-	/**
-	 * Message lists come back oldest-first or newest-first depending on the
-	 * endpoint, and under more than one key. Take what is there.
-	 */
-	function messagesFrom(result) {
-		return result?.messages || result?.items || result?.chat_messages || [];
+	/** Keeps a long room from growing the list without bound. */
+	const MAX_MESSAGES = 200;
+
+	/** A PubNub new_channel_message, in the shape the UI renders. */
+	function chatEntry(event) {
+		return {
+			message_id: event.message_id,
+			message: event.message,
+			user_profile: {
+				user_id: event.from_user_id,
+				name: event.from_name,
+				username: event.from_username,
+				photo_url: event.from_photo_url
+			}
+		};
 	}
 
-	async function loadChat() {
-		const info = channel.info;
-		if (!info || !chat.enabled) {
+	function addMessage(entry, { pending = false } = {}) {
+		if (entry.message_id && chat.messages.some(m => m.message_id === entry.message_id)) {
 			return;
 		}
 
-		try {
-			const result = await call("getChatMessages", {
-				channel: info.channel,
-				channelId: info.channel_id
-			});
+		// Our own message is shown immediately, then reconciled when it comes
+		// back over PubNub - otherwise it would appear twice, or not at all if
+		// the sender is not echoed.
+		const mine = chat.messages.findIndex(
+			m => m.pending && m.message === entry.message && m.user_profile?.user_id === entry.user_profile?.user_id
+		);
 
-			chat.messages = messagesFrom(result);
-			chat.error = "";
-		} catch (err) {
-			// Reported once, in place, rather than as a toast every poll.
-			chat.error = err.message;
+		if (mine !== -1) {
+			chat.messages[mine] = entry;
+			return;
+		}
+
+		chat.messages.push({ ...entry, pending });
+
+		if (chat.messages.length > MAX_MESSAGES) {
+			chat.messages.splice(0, chat.messages.length - MAX_MESSAGES);
 		}
 	}
 
@@ -59,9 +71,21 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			return false;
 		}
 
+		const meId = channel.info?.user_profile_id;
+
 		try {
 			await call("sendChatMessage", { channel: info.channel, message: body });
-			await loadChat();
+
+			addMessage(
+				{
+					message_id: null,
+					message: body,
+					user_profile: channel.users.find(u => u.user_id === meId) || { user_id: meId, name: "You" }
+				},
+				{ pending: true }
+			);
+
+			chat.error = "";
 			return true;
 		} catch (err) {
 			chat.error = err.message;
@@ -140,6 +164,10 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			events.on("unraise_hands", message => patchUser(message.user_id, { hand_raised: false }));
 			events.on("end_channel", () => leave());
 
+			// Live chat. Found by logging the actions the old allowlist was
+			// dropping - it carries the author inline, so no lookup is needed.
+			events.on("new_channel_message", event => addMessage(chatEntry(event)));
+
 			await events.subscribe(info);
 
 			pingTimer = setInterval(() => call("activePing", channelName).catch(() => {}), 30000);
@@ -150,14 +178,6 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			chat.canPost = Boolean(info.user_capabilities?.can_post_to_chat);
 			chat.messages = [];
 			chat.error = "";
-
-			if (chat.enabled) {
-				await loadChat();
-				// Polled, because the PubNub action carrying live messages is
-				// not known yet - unhandled actions are logged now, so the next
-				// session in a chatty room should name it.
-				chatTimer = setInterval(loadChat, 10000);
-			}
 
 			return true;
 		} catch (err) {
@@ -170,9 +190,7 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 
 	async function leave() {
 		clearInterval(pingTimer);
-		clearInterval(chatTimer);
 		pingTimer = null;
-		chatTimer = null;
 
 		chat.messages = [];
 		chat.enabled = false;
@@ -228,7 +246,6 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		speakingUids,
 		join,
 		leave,
-		loadChat,
 		sendChat,
 		toggleMute,
 		toggleHand,

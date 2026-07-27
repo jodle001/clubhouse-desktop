@@ -82,10 +82,12 @@ export const endpoints = {
 	getFeed: (c, body = {}) => c.request("/get_feed_v3", { body }),
 
 	/**
-	 * Room chat. A POST to /get_chat_messages answers 405, so it is a GET; the
-	 * probe could not get past 400 with only `channel`, which is why channel_id
-	 * goes too - join_channel returns both and the numeric one is the better
-	 * guess at what it wants.
+	 * Chat history, and unsolved. The path exists - a POST answers 405, so it
+	 * is a GET - but it rejects `channel`, `channel_id` and both together with
+	 * 400 and an empty error_message, from inside the room and outside it. The
+	 * app does not call it: live messages arrive over PubNub as
+	 * `new_channel_message`, so the only thing missing is history from before
+	 * you walked in. Kept for `npm run probe` to keep poking at.
 	 */
 	getChatMessages: (c, { channel, channelId } = {}) =>
 		c.request("/get_chat_messages", { query: { channel, channel_id: channelId } }),
