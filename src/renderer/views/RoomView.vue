@@ -105,10 +105,13 @@ async function send() {
 					<span class="grow">
 						<strong>{{ room.invite.value.fromName || "A moderator" }}</strong>
 						invited you to speak.
+						<small v-if="room.invite.value.error" class="room__invite-error">
+							{{ room.invite.value.error }}
+						</small>
 					</span>
 					<button class="btn" :disabled="accepting" @click="accept">Join as speaker</button>
 					<button class="btn btn-secondary" :disabled="accepting" @click="room.declineInvite()">
-						Not now
+						Dismiss
 					</button>
 				</div>
 
@@ -278,6 +281,13 @@ async function send() {
 	background: var(--surface);
 	border-left: 3px solid var(--green, #3ba55d);
 	font-size: 0.9rem;
+}
+
+.room__invite-error {
+	display: block;
+	margin-top: 0.2rem;
+	color: var(--danger);
+	font-size: 0.78rem;
 }
 
 .room__header {

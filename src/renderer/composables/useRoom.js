@@ -266,6 +266,14 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 
 			// The server says whether this room has chat and whether we may
 			// post, so the UI follows its answer rather than assuming.
+			// An invitation from before this session. join_channel marks it on
+			// your own user record, so joining a room where a moderator already
+			// beckoned still shows it - the PubNub event only fires once, live.
+			const mine = (info.users || []).find(u => u.user_id === info.user_profile_id);
+			if (mine?.is_invited_as_speaker && !mine.is_speaker) {
+				invite.value = { fromName: "", fromUserId: null };
+			}
+
 			chat.enabled = Boolean(info.is_room_chat_available && info.is_chat_enabled);
 			chat.canPost = Boolean(info.user_capabilities?.can_post_to_chat);
 			chat.messages = [];
@@ -340,7 +348,10 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			invite.value = null;
 			return true;
 		} catch (err) {
-			error.value = err.message;
+			// Reported on the invitation itself. `error` is only rendered when
+			// there is no room at all, so putting it there meant a failed accept
+			// looked like nothing happening.
+			invite.value = { ...invite.value, error: err.message };
 			return false;
 		}
 	}

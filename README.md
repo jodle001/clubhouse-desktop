@@ -146,6 +146,8 @@ routed at all.
 | `/get_following`, `/get_followers` | gone, no known replacement |
 | `/get_profile`, `/search_users` | fine |
 | `POST /block`, `POST /unblock` | alive - `{ user_id }` |
+| `/audience_reply` | alive - raising a hand |
+| `/accept_speaker_invite` | gone, no replacement found yet |
 | `POST /get_blocked_users` | alive |
 | `POST /send_channel_message` | alive - `{ channel, message }` |
 | `GET /get_channel_messages` | alive - chat history, `?channel=` |

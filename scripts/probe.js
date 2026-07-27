@@ -106,6 +106,22 @@ const CANDIDATES = [
 	{ path: "/get_notifications_v2", method: "POST", body: {} },
 	{ path: "/get_channel", method: "POST", body: {} },
 
+	// --- taking the stage ------------------------------------------------
+	// /accept_speaker_invite is retired (404), so being invited up currently
+	// cannot be accepted. join_channel marks the invitation on your own user
+	// record as is_invited_as_speaker, so the state exists - only the verb is
+	// missing. Empty bodies, so none of these can promote anybody by asking.
+	{ path: "/accept_speaker_invite", method: "POST", body: {} },
+	{ path: "/join_as_speaker", method: "POST", body: {} },
+	{ path: "/become_speaker", method: "POST", body: {} },
+	{ path: "/add_speaker", method: "POST", body: {} },
+	{ path: "/accept_channel_invite", method: "POST", body: {} },
+	{ path: "/accept_speaker_invitation", method: "POST", body: {} },
+	{ path: "/change_speaker_status", method: "POST", body: {} },
+	{ path: "/update_speaker_status", method: "POST", body: {} },
+	{ path: "/speaker_invite_response", method: "POST", body: {} },
+	{ path: "/audience_reply", method: "POST", body: {} },
+
 	// --- blocking and reporting -----------------------------------------
 	// /me already reports blocked_ids, so the state is known; what is missing
 	// is how to change it. Sent empty, so nobody is blocked by asking.

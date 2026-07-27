@@ -226,3 +226,68 @@ describe("being invited to speak", () => {
 		expect(room.invite.value).toBeNull();
 	});
 });
+
+describe("an invitation that predates this session", () => {
+	it("shows one that join_channel reports on your own record", async () => {
+		// The PubNub event fires once. Joining a room where a moderator already
+		// beckoned has to pick it up from is_invited_as_speaker instead.
+		bridge.api.joinChannel = vi.fn().mockResolvedValue({
+			ok: true,
+			data: {
+				success: true,
+				channel: "C1",
+				user_profile_id: 9,
+				users: [person(9, { is_invited_as_speaker: true })],
+				user_capabilities: {}
+			}
+		});
+
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		expect(room.invite.value).not.toBeNull();
+	});
+
+	it("does not badger somebody who is already a speaker", async () => {
+		bridge.api.joinChannel = vi.fn().mockResolvedValue({
+			ok: true,
+			data: {
+				success: true,
+				channel: "C1",
+				user_profile_id: 9,
+				users: [person(9, { is_invited_as_speaker: true, is_speaker: true })],
+				user_capabilities: {}
+			}
+		});
+
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		expect(room.invite.value).toBeNull();
+	});
+
+	it("reports a failed accept on the invitation, where it can be seen", async () => {
+		// `error` only renders when there is no room at all, so a failure put
+		// there was invisible - which is the bug this whole feature was fixing.
+		bridge.api.joinChannel = vi.fn().mockResolvedValue({
+			ok: true,
+			data: {
+				success: true,
+				channel: "C1",
+				user_profile_id: 9,
+				users: [person(9, { is_invited_as_speaker: true })],
+				user_capabilities: {}
+			}
+		});
+		bridge.api.acceptSpeakerInvite = vi.fn().mockResolvedValue({
+			ok: false,
+			error: { message: "Clubhouse returned HTTP 404", status: 404 }
+		});
+
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		await expect(room.acceptInvite()).resolves.toBe(false);
+		expect(room.invite.value.error).toMatch(/404/);
+	});
+});
