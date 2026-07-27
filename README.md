@@ -44,64 +44,64 @@ unprivileged user namespaces disabled. Either re-enable them
 (`sudo sysctl -w kernel.unprivileged_userns_clone=1`) or start with
 `npm start -- --no-sandbox`.
 
-# Current status: sign-in is blocked
+# Status of sign-in
 
-Tested against the live API in 2026. The app itself is fine - it installs,
-launches, renders, and every screen works. Sign-in does not, and the reason is
-on Clubhouse's side rather than in this code.
+Tested against the live API in 2026. Getting a phone number accepted took four
+distinct fixes, in this order:
 
-Submitting a phone number returns:
+1. **Is the API alive?** Yes - `check_for_update` answers in ~200ms.
+2. **Is the 2021 build rejected?** It was flagged for a *mandatory* upgrade.
+3. **Was the number malformed?** Yes, and that was a real bug here - the client
+   sent whatever was typed, guarded only by a length check. See `app/phone.mjs`.
+4. **Is the client itself rejected?** It was, while identifying as an iPhone:
 
-```
-login did not pass token validation!
-```
+   ```
+   login did not pass token validation!
+   ```
 
-Clubhouse's own support documentation describes this error as the device being
-unsupported or running an unsupported operating system. The number is accepted
-as valid - the request gets far enough to be judged on where it came from. In
-other words sign-in is gated on the client proving it is a genuine app on a
-supported mobile OS, which a desktop Electron client is not and cannot pretend
-to be by editing request headers.
+   Clubhouse's support docs describe that as an unsupported device or OS. Apple's
+   DeviceCheck / App Attest is iOS-only, so a request claiming to be an iPhone
+   can be asked for a hardware-signed token no desktop can produce.
 
-What was ruled out along the way, in order:
+Clubdeck, a desktop client that does still sign in, sidesteps that by
+identifying as **Android**. This client now does the same - see
+`app/profile.mjs` for the values and how they were recovered and verified.
 
-1. **Is the API alive?** Yes. `check_for_update` answers in ~200ms.
-2. **Is the 2021 build rejected?** It was flagged for a mandatory upgrade.
-   Raising the build headers to 23.09.01 / 2446 cleared that - the API now
-   reports `has_update: false`. See `app/profile.mjs`.
-3. **Was the number malformed?** Yes, and that was a real bug in this client -
-   it sent whatever was typed. Fixed; see `app/phone.mjs`. That changed the
-   error from "your phone number is incorrect" to the one above.
-4. **Is it the device check?** Yes, and that is where it stops.
-
-Anything that got past this would mean defeating a device attestation check,
-not fixing a bug in this repo. The rest of the app is in good shape if the
-situation ever changes, and everything up to the auth call is verified working
-against a mock backend.
+Two caveats worth knowing. Clubhouse allows one session per account, so signing
+in here will end a session elsewhere and vice versa. And an unofficial client
+always carries some risk to the account, as the notice at the top of this file
+says.
 
 # The app identity this client presents
 
-This client talks to Clubhouse's *private* mobile API, and identifies itself as
-an iOS build via `CH-AppVersion` / `CH-AppBuild` headers. Those headers live in
-one place, `app/profile.mjs`.
+This client talks to Clubhouse's *private* mobile API and identifies itself
+through `User-Agent`, `CH-AppVersion`, `CH-AppBuild` and `CH-DeviceId`. Those
+live in one place, `app/profile.mjs`:
 
-The project originally sent build 304 (0.1.28, March 2021). Asked about that
-build, the API replies:
+| header | value |
+| --- | --- |
+| `User-Agent` | `clubhouse/android` |
+| `CH-AppVersion` | `0.1.8` |
+| `CH-AppBuild` | `2576` |
+| `CH-DeviceId` | a UUID generated once and persisted |
 
-```json
-{"success":true,"has_update":true,"is_mandatory":true,
- "app_version":"23.09.01 (2446)","app_build":2446}
-```
+The project originally claimed to be the March 2021 iOS build (0.1.28 / 304).
+Every iOS identity tried, including the newest one the API itself reports as
+current, was refused at sign-in with `login did not pass token validation`.
+Presenting as Android is what Clubdeck does, and it is the only identity seen
+to get past that.
 
-i.e. it flags build 304 as needing a *mandatory* upgrade. `app/profile.mjs`
-therefore now sends build 2446 (23.09.01) - the newest build the API itself
-reports as current. Only the four identity fields were changed; the Agora and
-PubNub keys are deliberately left alone, since there is no evidence about what
-the current app uses and guessing would break what still works.
+`CH-DeviceId` matters too: with no value in the profile, the API client mints a
+fresh UUID on *every request*, so one session looks like dozens of different
+devices. It is now generated once per install and reused.
 
-Note that `check_for_update` is unauthenticated, so a clean answer there does
-not prove the auth endpoints accept this build. Editing `app/profile.mjs` is
-the place to try other values.
+The Agora and PubNub credentials are unchanged from the original a304 profile,
+and were confirmed byte-identical to the ones Clubdeck sends - so only the
+identity headers ever needed to change.
+
+Note that `check_for_update` is unauthenticated, so a clean answer there proves
+nothing about the auth endpoints. `app/profile.mjs` is the place to try other
+values.
 
 # Checking whether the backend still answers
 
