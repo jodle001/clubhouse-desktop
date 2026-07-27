@@ -1,6 +1,7 @@
 const ClubHouseApi = require("clubhouse-api");
 const store = require("store");
 import AppProfile from "../profile.mjs";
+import { normalizePhone, phoneError } from "../phone.mjs";
 
 const THEME_AUTO = "auto";
 const THEME_LIGHT = "light";
@@ -220,10 +221,17 @@ const Home = {
     },
     invitePerson: async function() {
       if (this.newInvite.name.length && this.newInvite.phone.length) {
+        // Same E.164 requirement as sign-in.
+        const phone = normalizePhone(this.newInvite.phone);
+        const problem = phoneError(phone);
+        if (problem) {
+          new Notification("Not Valid", { body: problem });
+          return;
+        }
         const result = await ClubHouseApi.api.inviteToApp(
           this.reqProfile,
           this.newInvite.name,
-          this.newInvite.phone
+          phone
         );
         console.log(result);
         if (result.success) {

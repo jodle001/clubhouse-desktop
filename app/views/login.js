@@ -1,6 +1,7 @@
 const ClubHouseApi = require('clubhouse-api');
 const store = require('store');
 import AppProfile from "../profile.mjs";
+import { normalizePhone, phoneError } from "../phone.mjs";
 
 const profiles = {
     ...AppProfile,
@@ -28,28 +29,34 @@ const Login = {
     },
     methods:{
         smsAuth: async function(){
-            if(this.phone.length <= 16 && this.phone.length >= 4){
-                this.loading = true;
-                const result = await ClubHouseApi.api.requestMobileAuth(profiles,this.phone);
-                console.log(result);
+            // The API only accepts E.164, so normalize before sending rather
+            // than passing the raw input through a length check.
+            const phone = normalizePhone(this.phone);
+            const problem = phoneError(phone);
 
-                if(result.success){
-                    this.$router.push({
-                        name:'verify',
-                        params:{
-                            phone: this.phone
-                       }
-                    });
-                }else{
-                    console.error(result);
-                    this.loading = false;
-                    const notif = new Notification('Failed', {
-                        body: result.error_message
-                    });
-                }
-            }else{
+            if(problem){
                 new Notification('Not Valid',{
-                    body: 'Phone number should be 13 characters'
+                    body: problem
+                });
+                return;
+            }
+
+            this.loading = true;
+            const result = await ClubHouseApi.api.requestMobileAuth(profiles,phone);
+            console.log('start_phone_number_auth', phone, result);
+
+            if(result.success){
+                this.$router.push({
+                    name:'verify',
+                    params:{
+                        phone: phone
+                   }
+                });
+            }else{
+                console.error(result);
+                this.loading = false;
+                const notif = new Notification('Failed', {
+                    body: `${result.error_message || 'Request failed'} (sent as ${phone})`
                 });
             }
         }
@@ -63,8 +70,9 @@ const Login = {
                     <h1 class="h6 font-weight-bold d-block text-center">Clubhouse</h1>
                     <small class="text-muted mb-5 d-block text-center">Unofficial Desktop Client</small>
                     <div class="input-group">
-                        <input type="tel" class="form-control" v-model="phone" placeholder="+442123532" />
+                        <input type="tel" class="form-control" v-model="phone" placeholder="+15551234567" @keyup.enter="smsAuth" />
                     </div>
+                    <small class="text-muted mt-2 d-block text-center">Include your country code, starting with +</small>
                     <div class="d-flex align-items-center justify-content-center mt-4">
                         <button class="btn-primary" @click="smsAuth">Next</button>
                     </div>
