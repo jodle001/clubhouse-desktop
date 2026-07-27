@@ -88,24 +88,45 @@ export function newDeviceId(randomUUID = globalThis.crypto?.randomUUID) {
 		.toUpperCase();
 }
 
-/** Headers every request carries, given a session. */
-export function buildHeaders({ deviceId, userId, authToken, locale = "en_US", language = "en-US" } = {}) {
+/**
+ * Headers every request carries, given a session.
+ *
+ * The set and the insertion order both reproduce what the original client sent
+ * (clubhouse-api's `agent.js`), because that request demonstrably got a code
+ * delivered and the current one does not. Header order is part of how a server
+ * fingerprints a client, so it is not incidental - keep it.
+ *
+ * `host` is supplied by the transport, which knows the URL.
+ */
+export function buildHeaders({
+	deviceId,
+	userId,
+	authToken,
+	locale = "en_US",
+	language = "en-US",
+	host
+} = {}) {
 	const headers = {
 		"User-Agent": APP_IDENTITY.userAgent,
 		"CH-Languages": language,
 		"CH-Locale": locale,
 		"CH-AppVersion": APP_IDENTITY.appVersion,
 		"CH-AppBuild": APP_IDENTITY.appBuild,
-		// Sent by real clients. Harmless, and one less way to look synthetic.
-		"ch-keyboards": language.replace("-", "_"),
 		"CH-DeviceId": deviceId || "(null)",
-		"CH-UserID": userId == null ? "(null)" : String(userId),
-		Accept: "application/json",
-		"Accept-Language": "en-US;q=1"
+		"CH-UserID": userId == null ? "(null)" : String(userId)
 	};
 
 	if (authToken) {
 		headers.Authorization = `Token ${authToken}`;
+	}
+
+	headers.Accept = "application/json";
+	headers["Accept-Encoding"] = "gzip, deflate, br";
+	headers["Accept-Language"] = "en-US;q=1";
+	headers.Connection = "keep-alive";
+
+	if (host) {
+		headers.Host = host;
 	}
 
 	return headers;

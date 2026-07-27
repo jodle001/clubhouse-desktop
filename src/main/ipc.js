@@ -10,10 +10,13 @@ import { ipcMain } from "electron";
 import { ClubhouseClient } from "../shared/api/client.js";
 import { endpoints } from "../shared/api/endpoints.js";
 import { SERVICES } from "../shared/profile.js";
+import { nodeTransport } from "./transport.js";
 
 export function registerIpc({ session, settings, verbose = false }) {
 	const client = new ClubhouseClient({
 		getSession: () => session.credentials(),
+		// Not the global fetch: see transport.js for why that broke sign-in.
+		transport: nodeTransport,
 		onRequest: verbose
 			? event => {
 				if (event.phase === "request") {

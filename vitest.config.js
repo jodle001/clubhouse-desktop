@@ -23,6 +23,15 @@ export default defineConfig({
 				plugins: [vue()],
 				resolve: { alias },
 				test: {
+					name: "main",
+					environment: "node",
+					include: ["tests/main/**/*.test.js"]
+				}
+			},
+			{
+				plugins: [vue()],
+				resolve: { alias },
+				test: {
 					name: "renderer",
 					environment: "jsdom",
 					include: ["tests/renderer/**/*.test.js"],

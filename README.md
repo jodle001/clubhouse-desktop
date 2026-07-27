@@ -82,6 +82,11 @@ Sign-in took four fixes to get working, recorded here so nobody repeats them:
    however you normally write it.
 4. **Accept 6-digit codes.** Clubhouse sends six; the old client silently
    required exactly four and did nothing otherwise.
+5. **Do not use Node's global `fetch`.** It is undici, which follows the Fetch
+   standard and so sends `sec-fetch-mode: cors` - a browser header no native app
+   sends. Clubhouse answered `success: true` and then dispatched neither the SMS
+   nor the voice call. `src/main/transport.js` uses `node:https` instead, which
+   sends only what it is given.
 
 If sign-in fails, `npm run doctor` reports whether the API still accepts this
 client's identity.
@@ -90,7 +95,10 @@ client's identity.
 
 Clubhouse can answer `success: true, is_blocked: false, error_message: null`
 and still send nothing. No field reports it, so the only way to tell is that no
-text turns up. When that happens the identity is the first thing to vary:
+text turns up. That is what a request which does not look like the app it claims
+to be gets you - see point 5 above for the one that caused it here.
+
+If it happens again, the identity is the next thing to vary:
 
 ```sh
 CLUBHOUSE_IDENTITY=clubdeck-ua npm start -- --verbose   # build in the User-Agent

@@ -61,7 +61,8 @@ export class ClubhouseClient {
 		}
 
 		const method = body === undefined ? "GET" : "POST";
-		const headers = buildHeaders(this.getSession());
+		// Host is sent explicitly, in the position the original client sent it.
+		const headers = buildHeaders({ ...this.getSession(), host: new URL(this.apiRoot).host });
 		const options = { method, headers };
 
 		if (body !== undefined) {
