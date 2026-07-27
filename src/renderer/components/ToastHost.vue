@@ -9,6 +9,7 @@ const { toasts, dismiss } = useToast();
 		<div v-for="t in toasts.items" :key="t.id" class="toast" :class="`toast--${t.type}`" @click="dismiss(t.id)">
 			<strong v-if="t.title">{{ t.title }}</strong>
 			<span>{{ t.message }}</span>
+			<span v-if="t.repeats > 1" class="toast__count">×{{ t.repeats }}</span>
 		</div>
 	</div>
 </template>
@@ -37,6 +38,13 @@ const { toasts, dismiss } = useToast();
 .toast strong {
 	display: block;
 	font-size: 0.85rem;
+}
+
+.toast__count {
+	display: inline-block;
+	margin-left: 0.4rem;
+	opacity: 0.7;
+	font-variant-numeric: tabular-nums;
 }
 
 .toast--error {

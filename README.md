@@ -40,6 +40,7 @@ Electron. `sudo dnf install rpm-build` is only required to build an `.rpm`.
 npm test           # unit + component tests
 npm run lint
 npm run doctor     # check the API accepts this client's identity
+npm run probe      # ask the live API which endpoints still exist
 npm run dist:linux # AppImage, .deb and .rpm into dist/
 ```
 
@@ -127,6 +128,24 @@ CLUBHOUSE_VERBOSE=1 npm run dev
 
 `npm run dev` needs the environment variable rather than the flag: its CLI
 parses its own arguments and rejects unknown ones.
+
+## The 2021 API is partly gone
+
+Sign-in works, and `/me` still answers. But `get_channels`, `get_online_friends`
+and `get_events` - the calls the home screen is built on - return a plain-text
+`404 Not found`. Not an error the app can interpret: the paths are not routed at
+all. Clubhouse replaced the "hallway" those endpoints served, and every public
+description of this API dates from before that.
+
+`npm run probe` asks the live API what it still serves, using your signed-in
+session and the app's own headers, so a result there means the same thing inside
+the app. It takes extra names to try:
+
+```sh
+npm run probe -- get_feed_v3 get_hallway
+```
+
+Until the replacements are known, the home screen will be empty.
 
 ## Licence
 

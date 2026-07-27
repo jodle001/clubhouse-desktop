@@ -11,7 +11,11 @@
  * known (the Agora key and the three PubNub values).
  */
 
-export const API_ROOT = "https://www.clubhouseapi.com/api";
+// `process` is absent in the renderer, which bundles this module for SERVICES.
+const env = typeof process !== "undefined" ? (process.env ?? {}) : {};
+
+/** Overridable so scripts/probe.js can be exercised against a stub API. */
+export const API_ROOT = env.CLUBHOUSE_API_ROOT || "https://www.clubhouseapi.com/api";
 
 /**
  * Clubhouse can accept a sign-in request (`success: true`, `is_blocked: false`)
@@ -45,11 +49,7 @@ export function resolveIdentity(name) {
 	return Object.freeze({ ...(IDENTITIES[name] || IDENTITIES[DEFAULT_IDENTITY]) });
 }
 
-// `process` is absent in the renderer, which bundles this module for SERVICES.
-const identityName =
-	typeof process !== "undefined" ? process.env?.CLUBHOUSE_IDENTITY : undefined;
-
-export const APP_IDENTITY = resolveIdentity(identityName);
+export const APP_IDENTITY = resolveIdentity(env.CLUBHOUSE_IDENTITY);
 
 /** Credentials for the services Clubhouse hosts its rooms and signalling on. */
 export const SERVICES = Object.freeze({

@@ -1,0 +1,150 @@
+#!/usr/bin/env node
+/**
+ * Asks the live API which endpoints still exist.
+ *
+ * This app was written against Clubhouse's 2021 API. Some of those paths are
+ * gone: they answer a plain-text "Not found", which is a router miss rather
+ * than an error the app can interpret. Published documentation is all from the
+ * same era, so the only reliable way to find what replaced them is to ask.
+ *
+ *   npm run probe                      # the built-in candidate list
+ *   npm run probe -- get_feed_v3 ...   # try specific names as well
+ *
+ * Uses the signed-in session and the app's own identity and headers, so a
+ * result here means the same thing inside the app.
+ */
+
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { API_ROOT, APP_IDENTITY, buildHeaders } from "../src/shared/profile.js";
+import { nodeTransport } from "../src/main/transport.js";
+
+const PRODUCT = "Clubhouse Desktop";
+
+/** Where electron-store puts the session, per platform. */
+function sessionPath() {
+	if (process.platform === "darwin") {
+		return join(homedir(), "Library", "Application Support", PRODUCT, "session.json");
+	}
+
+	if (process.platform === "win32") {
+		return join(process.env.APPDATA || join(homedir(), "AppData", "Roaming"), PRODUCT, "session.json");
+	}
+
+	return join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), PRODUCT, "session.json");
+}
+
+function loadSession() {
+	const path = sessionPath();
+
+	try {
+		const store = JSON.parse(readFileSync(path, "utf8"));
+		return {
+			deviceId: store.deviceId,
+			userId: store.user?.user_profile?.user_id,
+			authToken: store.user?.auth_token
+		};
+	} catch {
+		console.error(`\nNo signed-in session at ${path}\nSign in with \`npm start\` first.\n`);
+		process.exit(1);
+	}
+}
+
+// method: POST sends a body, GET sends a query string.
+const CANDIDATES = [
+	// Known good, so a total failure is obvious rather than confusing.
+	{ path: "/me", method: "POST", body: {} },
+
+	// What the app calls now, and which 404s.
+	{ path: "/get_channels", method: "POST", body: {} },
+	{ path: "/get_online_friends", method: "POST", body: {} },
+	{ path: "/get_events", method: "GET", query: { page: 1, page_size: 25 } },
+
+	// The feed replaced the hallway in the 2022 redesign.
+	{ path: "/get_feed_v3", method: "POST", body: {} },
+	{ path: "/get_feed_v2", method: "POST", body: {} },
+	{ path: "/get_feed", method: "POST", body: {} },
+	{ path: "/get_feed_v3", method: "GET", query: {} },
+
+	// Other shapes worth ruling in or out.
+	{ path: "/get_online_channels", method: "POST", body: {} },
+	{ path: "/get_all_channels", method: "POST", body: {} },
+	{ path: "/get_upcoming_events", method: "GET", query: { page: 1, page_size: 25 } },
+	{ path: "/get_events_v2", method: "GET", query: { page: 1, page_size: 25 } },
+
+	// Endpoints the app also depends on, worth checking in the same pass.
+	{ path: "/get_notifications", method: "GET", query: { page: 1, page_size: 20 } },
+	{ path: "/get_actionable_notifications", method: "GET", query: {} },
+	{ path: "/get_suggested_follows_friends_only", method: "POST", body: { page: 1, page_size: 25 } },
+	{ path: "/get_following", method: "GET", query: { user_id: 0, page: 1, page_size: 25 } }
+];
+
+function describe(status, contentType, text) {
+	const flat = text.replace(/\s+/g, " ").trim();
+
+	if (status === 404) {
+		return "gone";
+	}
+
+	if (!/json/i.test(contentType || "")) {
+		return `not JSON: ${flat.slice(0, 60)}`;
+	}
+
+	try {
+		const data = JSON.parse(flat);
+		const keys = Object.keys(data).slice(0, 6).join(", ");
+		return `JSON { ${keys}${Object.keys(data).length > 6 ? ", ..." : ""} }`;
+	} catch {
+		return `unparseable: ${flat.slice(0, 60)}`;
+	}
+}
+
+const session = loadSession();
+const extra = process.argv.slice(2).map(name => ({
+	path: name.startsWith("/") ? name : `/${name}`,
+	method: "POST",
+	body: {}
+}));
+
+console.log(`\nIdentity: ${APP_IDENTITY.userAgent} ${APP_IDENTITY.appVersion} (${APP_IDENTITY.appBuild})`);
+console.log(`Signed in as user ${session.userId ?? "(unknown)"}\n`);
+
+const alive = [];
+
+for (const candidate of [...CANDIDATES, ...extra]) {
+	let url = API_ROOT + candidate.path;
+
+	if (candidate.query) {
+		const qs = new URLSearchParams(candidate.query).toString();
+		if (qs) {
+			url += `?${qs}`;
+		}
+	}
+
+	const headers = buildHeaders({ ...session, host: new URL(API_ROOT).host });
+	const options = { method: candidate.method, headers };
+
+	if (candidate.body !== undefined) {
+		headers["Content-Type"] = "application/json; charset=utf-8";
+		options.body = JSON.stringify(candidate.body);
+	}
+
+	const label = `${candidate.method} ${candidate.path}`.padEnd(46);
+
+	try {
+		const response = await nodeTransport(url, options);
+		const text = await response.text();
+		const verdict = describe(response.status, response.headers?.["content-type"], text);
+
+		console.log(`${label} ${String(response.status).padEnd(4)} ${verdict}`);
+
+		if (response.status !== 404) {
+			alive.push(label.trim());
+		}
+	} catch (error) {
+		console.log(`${label} ---  ${error.message}`);
+	}
+}
+
+console.log(`\nStill served: ${alive.length ? alive.join(", ") : "nothing"}\n`);
