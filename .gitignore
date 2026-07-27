@@ -1,0 +1,8 @@
+# Installed dependencies and packaged output
+node_modules/
+dist/
+
+# webpack output (build/ also holds the tracked app icons)
+build/bundle.js
+
+.DS_Store

@@ -4,6 +4,7 @@
 	"version": "0.0.0",
 	"description": "Clubhouse unofficial desktop client",
 	"license": "MIT",
+	"main": "index.js",
 	"repository": "callmearta/clubhouse-desktop",
 	"author": {
 		"name": "Arta Mo",
@@ -14,8 +15,10 @@
 		"lint": "xo",
 		"test": "npm run lint",
 		"start": "electron .",
+		"doctor": "node scripts/doctor.js",
 		"pack": "electron-builder --dir",
 		"dist": "electron-builder --macos --linux --windows",
+		"dist:linux": "electron-builder --linux",
 		"release": "np"
 	},
 	"nodemonConfig": {
@@ -78,6 +81,13 @@
 		"envs": [
 			"node",
 			"browser"
+		],
+		"ignores": [
+			"app/a.js",
+			"app/agora.js",
+			"build/**",
+			"dist/**",
+			"static/**"
 		]
 	},
 	"np": {
@@ -113,7 +123,8 @@
 		"linux": {
 			"target": [
 				"AppImage",
-				"deb"
+				"deb",
+				"rpm"
 			],
 			"category": "Network;Chat"
 		}

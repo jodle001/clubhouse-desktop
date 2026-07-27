@@ -33,6 +33,7 @@ const Home = {
         next((vm) => {
           vm.$router.replace({ name: "waitlist" });
         });
+        return;
       }
     }
     next();
@@ -55,6 +56,8 @@ const Home = {
     console.log("beforeDestroy Home");
     clearInterval(this.channelsInterval);
     this.channelsInterval = null;
+    clearTimeout(this.channelsRetryTimeout);
+    this.channelsRetryTimeout = null;
     clearInterval(this.onlineFriendsInterval);
     this.onlineFriendsInterval = null;
   },
@@ -71,6 +74,7 @@ const Home = {
       loading: false,
       retry: 0,
       channelsInterval: null,
+      channelsRetryTimeout: null,
       searchQuery: "",
       newRoom: {
         modalVisible: false,
@@ -149,11 +153,11 @@ const Home = {
         const result = await ClubHouseApi.api.getChannels(this.reqProfile);
         console.log(result);
         if (result.success) {
+          this.retry = 0;
+          const settings = store.get("settings") || {};
           this.channelsResult = result;
-          this.channels = result.channels.filter((channel) =>
-            store.get("settings").filterEastern
-              ? isLatinString(channel.topic)
-              : true
+          this.channels = (result.channels || []).filter((channel) =>
+            settings.filterEastern ? isLatinString(channel.topic) : true
           );
           this.channelsLoading = false;
           if (this.channelsInterval) {
@@ -164,22 +168,23 @@ const Home = {
           }, 30000);
         } else {
           console.error(result);
-          if (this.events.length) {
-            this.getChannels();
+          if (this.retry < 2) {
+            // Back off before retrying - retrying immediately spins a request
+            // loop that saturates the API and can get the account banned.
+            this.retry++;
+            clearInterval(this.channelsInterval);
+            clearTimeout(this.channelsRetryTimeout);
+            this.channelsRetryTimeout = setTimeout(function() {
+              $this.getChannels();
+            }, 5000 * $this.retry);
           } else {
-            if (this.retry < 2) {
-              this.getChannels();
-              this.retry++;
-            } else {
-              new Notification("Invalid Token", {
-                body:
-                  "Your token is invalid. Try again and if you see this error again, Logout and Log in back",
-              });
-              this.shouldLogout = true;
-              this.loading = false;
-              // store.remove('userData');
-              // this.$router.replace({name:'login'});
-            }
+            new Notification("Invalid Token", {
+              body:
+                "Your token is invalid. Try again and if you see this error again, Logout and Log in back",
+            });
+            this.shouldLogout = true;
+            this.channelsLoading = false;
+            this.loading = false;
           }
         }
       }
@@ -201,7 +206,7 @@ const Home = {
           params: { name: result.channel },
         });
       } else {
-        console.error(error);
+        console.error(result);
         const notif = new Notification("Failed", {
           body: result.error_message,
         });

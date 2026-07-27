@@ -8,8 +8,14 @@ const {
 	systemPreferences,
 	globalShortcut
 } = require("electron");
-require("electron-reload")(__dirname);
 const { is } = require("electron-util");
+
+// Only watch sources while developing - in a packaged build the sources live
+// inside app.asar and electron-reload just logs "Electron could not be found".
+if (is.development) {
+	require("electron-reload")(__dirname);
+}
+
 const unhandled = require("electron-unhandled");
 const debug = require("electron-debug");
 const contextMenu = require("electron-context-menu");

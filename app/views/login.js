@@ -12,6 +12,7 @@ const Login = {
         if(userData){
             if(!userData.is_verified){
                 next('/waitlist');
+                return;
             }
             next('/home');
         }else{

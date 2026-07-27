@@ -66,7 +66,9 @@ const Channel = {
 			channelsLoading: true,
 			loading: false,
 			retry: 0,
+			channelsRetry: 0,
 			channelsInterval: null,
+			channelsRetryTimeout: null,
 			searchQuery: "",
 			newRoom: {
 				modalVisible: false,
@@ -94,6 +96,8 @@ const Channel = {
 		this.onlineFriendsInterval = null;
 		clearInterval(this.channelsInterval);
 		this.channelsInterval = null;
+		clearTimeout(this.channelsRetryTimeout);
+		this.channelsRetryTimeout = null;
 		if (pubnub) {
 			pubnub.unsubscribeAll();
 			pubnub = null;
@@ -731,11 +735,11 @@ const Channel = {
 				const result = await ClubHouseApi.api.getChannels(this.reqProfile);
 				console.log(result);
 				if (result.success) {
+					this.channelsRetry = 0;
+					const settings = store.get("settings") || {};
 					this.channelsResult = result;
-					this.channels = result.channels.filter(channel =>
-						store.get("settings").filterEastern
-							? isLatinString(channel.topic)
-							: true
+					this.channels = (result.channels || []).filter(channel =>
+						settings.filterEastern ? isLatinString(channel.topic) : true
 					);
 					this.channelsLoading = false;
 					if (this.channelsInterval) {
@@ -746,8 +750,17 @@ const Channel = {
 					}, 30000);
 				} else {
 					console.error(result);
-					if (this.events.length) {
-						this.getChannels();
+					// Back off before retrying - retrying immediately spins a
+					// request loop that saturates the API.
+					if (this.channelsRetry < 2) {
+						this.channelsRetry++;
+						clearInterval(this.channelsInterval);
+						clearTimeout(this.channelsRetryTimeout);
+						this.channelsRetryTimeout = setTimeout(function() {
+							$this.getChannels();
+						}, 5000 * $this.channelsRetry);
+					} else {
+						this.channelsLoading = false;
 					}
 				}
 			}
@@ -770,7 +783,7 @@ const Channel = {
 					params: { name: result.channel }
 				});
 			} else {
-				console.error(error);
+				console.error(result);
 				const notif = new Notification("Failed", {
 					body: result.error_message
 				});

@@ -8,6 +8,7 @@ const Waitlist = {
             next(vm => {
                 vm.$router.replace('/home');
             });
+            return;
         }
         next();
     },

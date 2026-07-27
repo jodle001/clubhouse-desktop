@@ -25,5 +25,49 @@ Also i'm using a really old version of Agora web SDK and that's because new vers
 2. Go to root folder of project and run `npm install`
 3. Run `npm start` to run the project
 
+The app builds and launches on current Node versions (verified on Node 22) and
+on current Linux distributions, despite Electron 10 being old.
+
+## Fedora
+
+Everything the app needs at runtime ships inside Electron, so a plain
+`npm install && npm start` works. You only need extra packages to build
+installers:
+
+```sh
+sudo dnf install nodejs npm            # to run from source
+sudo dnf install rpm-build             # only if you want to build the .rpm
+```
+
+If the window fails to start with a sandbox error, your kernel has
+unprivileged user namespaces disabled. Either re-enable them
+(`sudo sysctl -w kernel.unprivileged_userns_clone=1`) or start with
+`npm start -- --no-sandbox`.
+
+# Checking whether the backend still answers
+
+This client talks to Clubhouse's *private* mobile API using the request headers
+of the March 2021 iOS build (app build 304). That API is not public and is not
+versioned for third parties, so it can start rejecting this client at any time
+without the app itself changing.
+
+To check where you stand before debugging anything else:
+
+```sh
+npm run doctor
+```
+
+It reports your Node/Electron versions and what the API returns for this app
+build, and distinguishes a real API rejection from a corporate proxy blocking
+the host.
+
 # How to build source code
 I've used electron-packager myself for bundling the app and building releases. You can do so using electron-packager too. I hope you do not build versions with minor changes and credit yourself for it!
+
+`electron-builder` is also configured, which is the easier route on Linux:
+
+```sh
+npm run dist:linux      # builds AppImage + .deb + .rpm into dist/
+```
+
+Then on Fedora: `sudo dnf install ./dist/clubhouse-*.x86_64.rpm`
