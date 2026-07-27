@@ -16,8 +16,12 @@ deliberately — please keep it if you fork this in turn.
 ```sh
 npm install
 npm run dev        # hot-reloading development build
-npm start          # run the production build
+npm start          # build, then run
 ```
+
+`npm install` downloads the Electron binary as a post-install step. If that is
+blocked by a proxy you will see *"Electron failed to install correctly"* — run
+`(cd node_modules/electron && node install.js)` to fetch it separately.
 
 Fedora needs nothing beyond `nodejs`/`npm`; everything else ships inside
 Electron. `sudo dnf install rpm-build` is only required to build an `.rpm`.
