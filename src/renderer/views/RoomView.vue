@@ -1,5 +1,5 @@
 <script setup>
-import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useRoom } from "../composables/useRoom.js";
 import { useSession, updateSettings } from "../composables/useSession.js";
@@ -34,6 +34,22 @@ async function exit() {
 
 // Whose profile is open over the room, if any.
 const viewing = ref(null);
+
+/**
+ * Why the microphone is or is not available. Two different reasons look
+ * identical on a greyed-out button, so the tooltip says which one applies.
+ */
+const micReason = computed(() => {
+	if (!state.settings.audioEnabled) {
+		return { enabled: false, why: "Audio is disabled in Settings" };
+	}
+
+	if (!room.isSpeaker.value) {
+		return { enabled: false, why: "Only speakers can unmute — raise your hand to be invited up" };
+	}
+
+	return { enabled: true, why: "" };
+});
 
 const draft = ref("");
 const sending = ref(false);
@@ -182,8 +198,8 @@ async function send() {
 				<footer class="room__bar">
 					<button
 						class="btn btn-secondary"
-						:disabled="!state.settings.audioEnabled"
-						:title="state.settings.audioEnabled ? '' : 'Audio is disabled in Settings'"
+						:disabled="!micReason.enabled"
+						:title="micReason.why"
 						@click="room.toggleMute()"
 					>
 						{{ room.muted.value ? "🔇 Muted" : "🎙️ Live" }}
@@ -191,6 +207,14 @@ async function send() {
 					<button class="btn btn-secondary" @click="room.toggleHand()">
 						{{ room.handRaised.value ? "✋ Hand raised" : "✋ Raise hand" }}
 					</button>
+
+					<!--
+						A microphone that refuses used to do so silently, which
+						is indistinguishable from a dead button.
+					-->
+					<p v-if="room.audioError.value" class="room__audio-error">
+						{{ room.audioError.value }}
+					</p>
 				</footer>
 			</div>
 
@@ -332,12 +356,20 @@ async function send() {
 	bottom: 1.25rem;
 	transform: translateX(-50%);
 	display: flex;
+	align-items: center;
 	gap: 0.6rem;
 	padding: 0.6rem;
 	background: var(--surface);
 	border-radius: 999px;
 	box-shadow: var(--shadow);
 	z-index: 2;
+}
+
+.room__audio-error {
+	margin: 0 0.5rem 0 0;
+	max-width: 22rem;
+	font-size: 0.76rem;
+	color: var(--danger);
 }
 
 /* --- chat panel ---------------------------------------------------- */

@@ -71,6 +71,14 @@ export class NullAudioEngine extends Emitter {
 	}
 
 	/**
+	 * A fresh Agora token. Clubhouse issues one per role, so the token handed
+	 * out at join time only permits listening.
+	 */
+	async renewToken(token) {
+		this._token = token;
+	}
+
+	/**
 	 * Speaker or listener. Agora's live mode starts everybody as audience, and
 	 * an audience member cannot publish - so being promoted to speaker means
 	 * nothing until the role changes too.
@@ -113,6 +121,11 @@ export class FakeAudioEngine extends NullAudioEngine {
 	async setRole(role) {
 		this.calls.push(["setRole", role]);
 		return super.setRole(role);
+	}
+
+	async renewToken(token) {
+		this.calls.push(["renewToken", token]);
+		return super.renewToken(token);
 	}
 
 	async leave() {
@@ -175,6 +188,16 @@ export class AgoraAudioEngine extends Emitter {
 		await this._client.join(appId, channel, token || null, uid);
 		this._joined = channel;
 		this.emit("joined", { channel });
+	}
+
+	async renewToken(token) {
+		if (!token || !this._client) {
+			return;
+		}
+
+		this._token = token;
+		await this._client.renewToken(token);
+		this.log("[audio:agora] token renewed");
 	}
 
 	async setRole(role) {

@@ -58,9 +58,16 @@ beforeEach(() => {
 
 	bridge = stubBridge();
 	bridge.api.getProfile = vi.fn().mockResolvedValue({ ok: true, data: { user_profile: theirProfile() } });
-	bridge.api.me = vi
-		.fn()
-		.mockResolvedValue({ ok: true, data: { following_ids: [], blocked_ids: [], user_profile: {} } });
+	// /me answers with a stub of a profile: an id, a name, a handle, a picture
+	// and a share link. No bio, no counts, no houses, no follow status.
+	bridge.api.me = vi.fn().mockResolvedValue({
+		ok: true,
+		data: {
+			following_ids: [],
+			blocked_ids: [],
+			user_profile: { user_id: 7, name: "Me", username: "me", photo_url: null }
+		}
+	});
 	bridge.api.follow = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
 	bridge.api.unfollow = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
 	bridge.api.block = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
@@ -201,6 +208,37 @@ describe("ProfileView", () => {
 		await settle(wrapper);
 
 		expect(bridge.api.me).toHaveBeenCalled();
+		expect(wrapper.findAll(".profile__actions button")).toHaveLength(0);
+	});
+});
+
+describe("your own profile", () => {
+	const mine = () =>
+		theirProfile({ user_id: 7, name: "Me", username: "me", num_followers: 412, num_following: 380 });
+
+	it("goes through get_profile rather than believing /me's stub", async () => {
+		// Read straight from /me it rendered a name above zero followers, zero
+		// following, no bio and no houses - an empty-looking account rather than
+		// a thin response.
+		bridge.api.getProfile = vi.fn().mockResolvedValue({ ok: true, data: { user_profile: mine() } });
+
+		const wrapper = mountProfile("me");
+		await settle(wrapper);
+
+		expect(bridge.api.getProfile).toHaveBeenCalledWith(7);
+		expect(wrapper.text()).toContain("412");
+		expect(wrapper.text()).toContain("380");
+		expect(wrapper.text()).toContain("For it is not in knowing much");
+	});
+
+	it("does not wait for /me when the id is already known", async () => {
+		bridge.api.getProfile = vi.fn().mockResolvedValue({ ok: true, data: { user_profile: mine() } });
+
+		const wrapper = mountProfile(7);
+		await settle(wrapper);
+
+		expect(bridge.api.getProfile).toHaveBeenCalledTimes(1);
+		expect(bridge.api.getProfile).toHaveBeenCalledWith(7);
 		expect(wrapper.findAll(".profile__actions button")).toHaveLength(0);
 	});
 });

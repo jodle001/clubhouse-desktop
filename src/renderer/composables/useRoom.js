@@ -18,6 +18,12 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 	/** A moderator's invitation to speak, until answered. */
 	const invite = ref(null);
 	const error = ref("");
+	/**
+	 * Anything the microphone refused to do. Separate from `error`, which means
+	 * "there is no room"; this one is shown while the room is perfectly fine and
+	 * only the audio is not.
+	 */
+	const audioError = ref("");
 
 	const chat = reactive({ messages: [], enabled: false, canPost: false, error: "" });
 
@@ -146,6 +152,16 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 	}
 
 	const me = computed(() => channel.info?.users?.find(u => u.is_self) || null);
+
+	/**
+	 * Read off the live user list rather than the join response, so a promotion
+	 * or a demotion during the room moves it. Only a speaker may publish, so
+	 * this is what decides whether the microphone button can do anything.
+	 */
+	const isSpeaker = computed(() =>
+		Boolean(channel.users.find(u => u.user_id === channel.info?.user_profile_id)?.is_speaker)
+	);
+
 	const speakers = computed(() => channel.users.filter(u => u.is_speaker));
 	const audience = computed(() => channel.users.filter(u => !u.is_speaker));
 
@@ -348,7 +364,17 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			return;
 		}
 
-		await audio.setMuted(!muted.value);
+		try {
+			await audio.setMuted(!muted.value);
+			audioError.value = "";
+		} catch (err) {
+			// Unmuting can fail for reasons the button cannot show by itself -
+			// no microphone permission, or no publish rights yet. Left
+			// unhandled this rejected silently and `muted` never moved, so the
+			// button looked broken rather than refused.
+			audioError.value = err.message;
+		}
+
 		muted.value = audio.isMuted();
 	}
 
@@ -365,13 +391,27 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		const meId = info.user_profile_id;
 
 		try {
-			await call("becomeSpeaker", info.channel);
+			const result = await call("becomeSpeaker", info.channel);
 			patchUser(meId, { is_speaker: true });
+
+			// Clubhouse issues an Agora token per role, and hands the publisher
+			// one back from this call. Keeping the listener token from
+			// join_channel is why unmuting failed with "haven't joined yet" -
+			// the role changed here and the credential did not.
+			await audio?.renewToken(result?.token);
 
 			// Agora's live mode starts everybody as audience, which cannot
 			// publish - so without this the microphone would stay silent no
 			// matter what the button said.
 			await audio?.setRole("host");
+
+			// The server says whether to arrive muted. It always has so far,
+			// and walking onto a stage with a live microphone is the wrong
+			// default anyway.
+			if (result?.should_join_muted !== false) {
+				await audio?.setMuted(true);
+				muted.value = true;
+			}
 
 			handRaised.value = false;
 			invite.value = null;
@@ -411,12 +451,14 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		houseMembers,
 		others,
 		me,
+		isSpeaker,
 		muted,
 		handRaised,
 		everCount,
 		invite,
 		joining,
 		error,
+		audioError,
 		speakingUids,
 		join,
 		leave,

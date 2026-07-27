@@ -9,6 +9,13 @@ vi.mock("vue-router", () => ({
 	useRoute: () => ({})
 }));
 
+// The view builds its own room, so the only way to keep the real Agora SDK out
+// of a test that turns audio on is to swap the factory.
+vi.mock("@/audio/index.js", async () => {
+	const actual = await vi.importActual("@/audio/index.js");
+	return { ...actual, createAudioEngine: async () => new actual.FakeAudioEngine() };
+});
+
 const joinResult = (overrides = {}) => ({
 	success: true,
 	channel: "C1",
@@ -125,6 +132,43 @@ describe("RoomView chat panel", () => {
 
 		expect(wrapper.find(".room__panel").exists()).toBe(true);
 		expect(wrapper.find(".room__compose").exists()).toBe(false);
+	});
+});
+
+describe("the microphone button", () => {
+	const micButton = wrapper => wrapper.findAll(".room__bar button")[0];
+
+	it("says which of the two reasons it is greyed out for", async () => {
+		// "Audio off in Settings" and "you are not a speaker" look identical on
+		// a disabled button, so the title has to distinguish them.
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		expect(micButton(wrapper).attributes("disabled")).toBeDefined();
+		expect(micButton(wrapper).attributes("title")).toMatch(/Settings/);
+	});
+
+	it("stays disabled for a listener even with audio on", async () => {
+		sessionState.settings = { audioEnabled: true };
+		bridge.api.joinChannel = vi.fn().mockResolvedValue({
+			ok: true,
+			data: joinResult({ users: [{ user_id: 7, name: "Me", is_speaker: false }] })
+		});
+
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		expect(micButton(wrapper).attributes("disabled")).toBeDefined();
+		expect(micButton(wrapper).attributes("title")).toMatch(/speakers/i);
+	});
+
+	it("works for a speaker with audio on", async () => {
+		sessionState.settings = { audioEnabled: true };
+
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		expect(micButton(wrapper).attributes("disabled")).toBeUndefined();
 	});
 });
 

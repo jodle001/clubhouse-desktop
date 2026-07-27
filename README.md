@@ -167,12 +167,27 @@ also exists but rejects every shape tried with an empty `error_message`, while
 `/send_channel_message`. An endpoint that says what is missing is worth more
 than one that only says no.
 
-Going on stage takes two steps, not one. `/become_speaker` is the Clubhouse
-half; the other is Agora's, because the client runs in `live` mode where
-everybody starts as `audience` and an audience member cannot publish. Without
+Going on stage takes three steps, not one. `/become_speaker` is the Clubhouse
+half. The second is Agora's, because the client runs in `live` mode where
+everybody starts as `audience` and an audience member cannot publish - without
 `setClientRole("host")` the microphone button would work and nobody would hear
-anything. The room keeps the two in step, in both directions - being removed
-from stage mutes and drops back to audience.
+anything. The third is the credential: Clubhouse issues an Agora token *per
+role*, and `/become_speaker` hands the publisher one back in its response. Keep
+the listener token from `join_channel` and unmuting fails with Agora's
+`INVALID_OPERATION: Can't publish stream, haven't joined yet!`, which names
+neither the token nor the role. The room keeps all three in step, in both
+directions - being removed from stage mutes and drops back to audience.
+
+`/become_speaker` also answers `should_join_muted`, and the microphone button
+reports what it was refused rather than rejecting silently: unhandled, a
+refusal and a dead button look exactly the same.
+
+`/me` is not a profile. It answers with a stub - `user_id`, `name`, `username`,
+`photo_url`, `share_url` - so your own profile goes through `/get_profile` like
+everybody else's. Read straight from `/me` it renders a name above zero
+followers, zero following, no bio and no houses, which looks like an empty
+account rather than a thin response. What `/me` is for is the two id lists
+(`following_ids`, `blocked_ids`), which appear nowhere else.
 
 PubNub carries more than chat. `invite_speaker` is how a moderator offers you
 the stage, and `channel_message_like_count_update` is somebody liking a message.

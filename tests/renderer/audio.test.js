@@ -43,6 +43,22 @@ describe("audio port", () => {
 		expect(seen).toEqual(["joined", "muted:false", "left"]);
 	});
 
+	it("starts as audience, which is what Agora's live mode does", async () => {
+		expect(new NullAudioEngine().role()).toBe("audience");
+	});
+
+	it("accepts a fresh token for a new role", async () => {
+		// Clubhouse issues one token per role, so taking the stage means
+		// swapping the credential as well as the role.
+		const engine = new FakeAudioEngine();
+		await engine.join({ channel: "x", token: "listener" });
+		await engine.renewToken("publisher");
+		await engine.setRole("host");
+
+		expect(engine.calls.map(c => c[0])).toEqual(["join", "renewToken", "setRole"]);
+		expect(engine.role()).toBe("host");
+	});
+
 	it("records calls when faked, so room flows are assertable", async () => {
 		const engine = new FakeAudioEngine();
 		await engine.join({ channel: "x", token: "t", uid: 1 });

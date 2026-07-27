@@ -392,4 +392,153 @@ describe("the audio role follows the stage", () => {
 		expect(roleCalls().at(-1)).toBe("audience");
 		expect(room.muted.value).toBe(true);
 	});
+
+	it("knows whether you are on stage, and follows a promotion", async () => {
+		joinWith([person(9), person(1, { is_speaker: true })]);
+		const room = makeRoomWithAudio();
+		await room.join("C1", { userId: 9 });
+
+		expect(room.isSpeaker.value).toBe(false);
+
+		room._events.deliver({ action: "add_speaker", channel: "C1", user_id: 9 });
+		await new Promise(resolve => setTimeout(resolve, 0));
+
+		expect(room.isSpeaker.value).toBe(true);
+	});
+});
+
+describe("the token that comes with the stage", () => {
+	/**
+	 * Clubhouse issues an Agora token per role. The one from join_channel only
+	 * permits listening, so a promotion that changes the role and keeps the old
+	 * credential produces "Can't publish stream, haven't joined yet!" - a
+	 * microphone button that does nothing at all.
+	 */
+	let audio;
+
+	function makeRoomWithAudio() {
+		const room = useRoom({
+			makeAudio: async () => {
+				audio = new FakeAudioEngine();
+				return audio;
+			},
+			makeEvents: async () => {
+				events = new FakeRoomEvents();
+				return events;
+			}
+		});
+
+		Object.defineProperty(room, "_events", { get: () => events });
+		return room;
+	}
+
+	const names = () => audio.calls.map(([name]) => name);
+
+	beforeEach(() => {
+		joinWith([person(9, { is_invited_as_speaker: true })]);
+	});
+
+	it("renews the publisher token become_speaker hands back", async () => {
+		bridge.api.becomeSpeaker = vi.fn().mockResolvedValue({
+			ok: true,
+			data: { success: true, token: "PUBLISHER-TOKEN", should_join_muted: true }
+		});
+
+		const room = makeRoomWithAudio();
+		await room.join("C1", { userId: 9 });
+		await expect(room.acceptInvite()).resolves.toBe(true);
+
+		expect(audio.calls).toContainEqual(["renewToken", "PUBLISHER-TOKEN"]);
+
+		// Before the role moves, so the client never holds host rights on a
+		// listener's credential.
+		expect(names().indexOf("renewToken")).toBeLessThan(names().lastIndexOf("setRole"));
+	});
+
+	it("arrives on stage muted when the server says so", async () => {
+		bridge.api.becomeSpeaker = vi.fn().mockResolvedValue({
+			ok: true,
+			data: { success: true, token: "T", should_join_muted: true }
+		});
+
+		const room = makeRoomWithAudio();
+		await room.join("C1", { userId: 9 });
+		await room.acceptInvite();
+
+		expect(audio.calls).toContainEqual(["setMuted", true]);
+		expect(room.muted.value).toBe(true);
+	});
+
+	it("does not mute when the server explicitly says not to", async () => {
+		bridge.api.becomeSpeaker = vi.fn().mockResolvedValue({
+			ok: true,
+			data: { success: true, token: "T", should_join_muted: false }
+		});
+
+		const room = makeRoomWithAudio();
+		await room.join("C1", { userId: 9 });
+		await room.acceptInvite();
+
+		expect(audio.calls).not.toContainEqual(["setMuted", true]);
+	});
+
+	it("still takes the stage when no token comes back", async () => {
+		// A response without one should not stop the promotion; the adapters
+		// ignore an empty token rather than throwing.
+		bridge.api.becomeSpeaker = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+
+		const room = makeRoomWithAudio();
+		await room.join("C1", { userId: 9 });
+
+		await expect(room.acceptInvite()).resolves.toBe(true);
+		expect(room.isSpeaker.value).toBe(true);
+	});
+});
+
+describe("a microphone that refuses", () => {
+	let audio;
+
+	function makeRoomWithAudio() {
+		const room = useRoom({
+			makeAudio: async () => {
+				audio = new FakeAudioEngine();
+				return audio;
+			},
+			makeEvents: async () => new FakeRoomEvents()
+		});
+
+		return room;
+	}
+
+	it("says why instead of leaving a dead button", async () => {
+		// Unhandled, the rejection left `muted` untouched and reported nothing,
+		// so a refusal and a broken button looked exactly the same.
+		joinWith([person(9, { is_speaker: true })]);
+		const room = makeRoomWithAudio();
+		await room.join("C1", { userId: 9 });
+
+		audio.setMuted = () => Promise.reject(new Error("Can't publish stream, haven't joined yet!"));
+
+		await expect(room.toggleMute()).resolves.toBeUndefined();
+
+		expect(room.audioError.value).toMatch(/publish/);
+		expect(room.muted.value).toBe(true);
+	});
+
+	it("clears the complaint once it works", async () => {
+		joinWith([person(9, { is_speaker: true })]);
+		const room = makeRoomWithAudio();
+		await room.join("C1", { userId: 9 });
+
+		const working = audio.setMuted.bind(audio);
+		audio.setMuted = () => Promise.reject(new Error("nope"));
+		await room.toggleMute();
+		expect(room.audioError.value).toBe("nope");
+
+		audio.setMuted = working;
+		await room.toggleMute();
+
+		expect(room.audioError.value).toBe("");
+		expect(room.muted.value).toBe(false);
+	});
 });

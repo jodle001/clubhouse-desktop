@@ -80,23 +80,34 @@ async function load() {
 	confirmingBlock.value = false;
 	mutuals.value = null;
 
-	if (isMe.value) {
-		const result = await run("me");
-		profile.value = result?.user_profile || null;
-		return;
-	}
+	/*
+	 * Your own profile goes through /get_profile too. /me answers with a stub -
+	 * user_id, name, username, photo_url, share_url and nothing else - so
+	 * reading it directly rendered a name over zero followers, zero following,
+	 * no bio and no houses, which looked like an empty account rather than a
+	 * thin response.
+	 *
+	 * The route can say "me" without knowing the id, so that case waits for /me
+	 * to supply one. Any other id is already known and fetches in parallel.
+	 */
+	const known = props.id === "me" ? null : Number(props.id);
+	const [mine, direct] = await Promise.all([
+		run("me"),
+		known ? run("getProfile", known) : null
+	]);
 
-	const [result, mine] = await Promise.all([run("getProfile", Number(props.id)), run("me")]);
+	const userId = known ?? mine?.user_profile?.user_id;
+	const result = direct ?? (userId ? await run("getProfile", userId) : null);
 	const found = result?.user_profile || null;
 
 	if (found) {
 		// Whether *we* blocked them is only in /me; the profile's
 		// is_blocked_by_network is a different thing entirely.
-		found._following = Boolean(mine?.following_ids?.includes(Number(props.id)));
+		found._following = Boolean(mine?.following_ids?.includes(userId));
 	}
 
 	profile.value = found;
-	blocked.value = Boolean(mine?.blocked_ids?.includes(Number(props.id)));
+	blocked.value = Boolean(mine?.blocked_ids?.includes(userId));
 }
 
 async function showMutuals() {
