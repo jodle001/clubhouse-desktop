@@ -11,6 +11,7 @@ import { ClubhouseClient } from "../shared/api/client.js";
 import { endpoints } from "../shared/api/endpoints.js";
 import { SERVICES } from "../shared/profile.js";
 import { nodeTransport } from "./transport.js";
+import { redact } from "./redact.js";
 
 export function registerIpc({ session, settings, verbose = false }) {
 	const client = new ClubhouseClient({
@@ -21,6 +22,11 @@ export function registerIpc({ session, settings, verbose = false }) {
 			? event => {
 				if (event.phase === "request") {
 					console.log(`[api] -> ${event.method} ${event.url}`, redact(event.body));
+					// Whether Authorization is present, and which identity went
+					// out, is usually the question when only some calls fail.
+					console.log("      headers:", JSON.stringify(redact(event.headers)));
+				} else if (event.raw !== undefined) {
+					console.log(`[api] <- ${event.status} ${event.url} NOT JSON:`, event.raw.slice(0, 1000));
 				} else {
 					console.log(`[api] <- ${event.status} ${event.url}`, redact(event.data));
 				}
@@ -65,18 +71,3 @@ export function registerIpc({ session, settings, verbose = false }) {
 	ipcMain.handle("settings:set", (_event, patch) => settings.update(patch));
 }
 
-/** Keeps credentials out of the terminal even in verbose mode. */
-function redact(value) {
-	if (!value || typeof value !== "object") {
-		return value;
-	}
-
-	const clone = Array.isArray(value) ? [...value] : { ...value };
-	for (const key of ["auth_token", "access_token", "refresh_token", "token", "rtm_token", "pubnub_token"]) {
-		if (key in clone) {
-			clone[key] = "<redacted>";
-		}
-	}
-
-	return clone;
-}

@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { gzipSync } from "node:zlib";
+import { brotliCompressSync, deflateSync, gzipSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { nodeTransport } from "../../src/main/transport.js";
 import { ClubhouseClient } from "@shared/api/client.js";
@@ -15,9 +15,24 @@ beforeAll(async () => {
 		req.on("end", () => {
 			lastRequest = { method: req.method, url: req.url, rawHeaders: req.rawHeaders, body };
 
-			if (req.url.endsWith("/gzipped")) {
-				res.writeHead(200, { "Content-Type": "application/json", "Content-Encoding": "gzip" });
-				res.end(gzipSync(JSON.stringify({ success: true, compressed: true })));
+			// We advertise gzip, deflate and br, so the server may use any of them.
+			const encodings = {
+				"/gzipped": ["gzip", gzipSync],
+				"/deflated": ["deflate", deflateSync],
+				"/brotlied": ["br", brotliCompressSync]
+			};
+
+			const match = Object.keys(encodings).find(path => req.url.endsWith(path));
+			if (match) {
+				const [encoding, compress] = encodings[match];
+				res.writeHead(200, { "Content-Type": "application/json", "Content-Encoding": encoding });
+				res.end(compress(JSON.stringify({ success: true, compressed: encoding })));
+				return;
+			}
+
+			if (req.url.endsWith("/html")) {
+				res.writeHead(502, { "Content-Type": "text/html" });
+				res.end("<html><body>502 Bad Gateway</body></html>");
 				return;
 			}
 
@@ -75,9 +90,14 @@ describe("nodeTransport", () => {
 		expect(sentHeaderNames()).toContain("CH-DeviceId");
 	});
 
-	it("decompresses a gzipped response", async () => {
-		const response = await nodeTransport(`${root}/gzipped`);
-		expect(JSON.parse(await response.text())).toEqual({ success: true, compressed: true });
+	it.each([
+		["gzipped", "gzip"],
+		["deflated", "deflate"],
+		["brotlied", "br"]
+	])("decompresses a %s response", async (path, encoding) => {
+		// All three are advertised in Accept-Encoding, so all three must work.
+		const response = await nodeTransport(`${root}/${path}`);
+		expect(JSON.parse(await response.text())).toEqual({ success: true, compressed: encoding });
 	});
 
 	it("reports a non-2xx through ok/status rather than throwing", async () => {
@@ -88,6 +108,38 @@ describe("nodeTransport", () => {
 
 	it("rejects rather than hanging when the host is unreachable", async () => {
 		await expect(nodeTransport("http://127.0.0.1:1/nope")).rejects.toThrow();
+	});
+});
+
+describe("a body that is not JSON", () => {
+	it("reports the status and the content, not just 'not JSON'", async () => {
+		const client = new ClubhouseClient({
+			getSession: () => ({ deviceId: "D", authToken: "T" }),
+			transport: nodeTransport,
+			apiRoot: root
+		});
+
+		await expect(client.request("/html")).rejects.toMatchObject({
+			name: "ApiError",
+			status: 502,
+			message: expect.stringContaining("502 Bad Gateway")
+		});
+	});
+
+	it("logs the raw body, which is the only thing that explains it", async () => {
+		const seen = [];
+		const client = new ClubhouseClient({
+			getSession: () => ({ deviceId: "D" }),
+			transport: nodeTransport,
+			apiRoot: root,
+			onRequest: event => seen.push(event)
+		});
+
+		await expect(client.request("/html")).rejects.toThrow();
+
+		const logged = seen.find(event => event.phase === "response");
+		expect(logged.raw).toContain("502 Bad Gateway");
+		expect(logged.status).toBe(502);
 	});
 });
 
@@ -107,5 +159,26 @@ describe("the client over this transport", () => {
 		expect(names).toContain("Accept-Encoding");
 		expect(names.some(name => /^sec-/i.test(name))).toBe(false);
 		expect(lastRequest.body).toBe('{"phone_number":"+15550001111"}');
+	});
+});
+
+describe("verbose logging", () => {
+	it("shows the request headers but never the token", async () => {
+		const seen = [];
+		const client = new ClubhouseClient({
+			getSession: () => ({ deviceId: "D", userId: 5, authToken: "SECRET-TOKEN" }),
+			transport: nodeTransport,
+			apiRoot: root,
+			onRequest: event => seen.push(event)
+		});
+
+		await client.request("/get_channels", { body: {} });
+
+		const request = seen.find(event => event.phase === "request");
+		expect(request.headers.Authorization).toBe("Token SECRET-TOKEN");
+
+		// ipc.js redacts before printing; assert the shape it relies on.
+		const [scheme] = request.headers.Authorization.split(" ");
+		expect(scheme).toBe("Token");
 	});
 });

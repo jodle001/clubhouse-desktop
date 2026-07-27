@@ -22,6 +22,17 @@ export class ApiError extends Error {
 
 const defaultTransport = (url, options) => globalThis.fetch(url, options);
 
+/** Enough of an unparseable body to recognise it, on one line. */
+function summarise(text, limit = 160) {
+	const flat = String(text).replace(/\s+/g, " ").trim();
+
+	if (!flat) {
+		return "(empty)";
+	}
+
+	return flat.length > limit ? `${flat.slice(0, limit)}...` : flat;
+}
+
 export class ClubhouseClient {
 	/**
 	 * @param {object} opts
@@ -70,7 +81,7 @@ export class ClubhouseClient {
 			options.body = JSON.stringify(body);
 		}
 
-		this.onRequest?.({ phase: "request", method, url, body });
+		this.onRequest?.({ phase: "request", method, url, body, headers });
 
 		let response;
 		try {
@@ -84,11 +95,15 @@ export class ClubhouseClient {
 		try {
 			data = text ? JSON.parse(text) : {};
 		} catch {
-			throw new ApiError("Clubhouse returned a response that was not JSON", {
-				status: response.status,
-				endpoint,
-				body: text.slice(0, 200)
-			});
+			// A parse failure is exactly when the raw body matters, so log it
+			// before throwing - reporting only "not JSON" hides the one thing
+			// that would explain it.
+			this.onRequest?.({ phase: "response", method, url, status: response.status, raw: text });
+
+			throw new ApiError(
+				`Clubhouse returned HTTP ${response.status} with a body that was not JSON: ${summarise(text)}`,
+				{ status: response.status, endpoint, body: text.slice(0, 500) }
+			);
 		}
 
 		this.onRequest?.({ phase: "response", method, url, status: response.status, data });
