@@ -81,6 +81,19 @@ export const endpoints = {
 	 */
 	getFeed: (c, body = {}) => c.request("/get_feed_v3", { body }),
 
+	/**
+	 * Room chat. A POST to /get_chat_messages answers 405, so it is a GET; the
+	 * probe could not get past 400 with only `channel`, which is why channel_id
+	 * goes too - join_channel returns both and the numeric one is the better
+	 * guess at what it wants.
+	 */
+	getChatMessages: (c, { channel, channelId } = {}) =>
+		c.request("/get_chat_messages", { query: { channel, channel_id: channelId } }),
+
+	/** `{ channel, message }` - the API named `message` itself, on a 400. */
+	sendChatMessage: (c, { channel, message } = {}) =>
+		c.request("/send_channel_message", { body: { channel, message } }),
+
 	joinChannel: (c, channel) =>
 		c.request("/join_channel", {
 			body: { channel, attribution_source: "feed", attribution_details: "e30=" }

@@ -143,7 +143,10 @@ routed at all.
 | `/get_online_friends` | gone, no known replacement |
 | `/get_events` | gone, no known replacement |
 | `/get_notifications` | gone, no known replacement |
-| `/get_following` | gone, no known replacement |
+| `/get_following`, `/get_followers` | gone, no known replacement |
+| `/get_profile`, `/search_users` | fine |
+| `GET /get_chat_messages` | alive - room chat history |
+| `POST /send_channel_message` | alive - `{ channel, message }` |
 
 The home screen reads rooms out of the feed: `/get_feed_v3` answers
 `{ items, available_topics }`, and each item wraps one live room in a `channel`

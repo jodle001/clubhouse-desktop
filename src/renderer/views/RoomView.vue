@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useRoom } from "../composables/useRoom.js";
 import { useSession } from "../composables/useSession.js";
@@ -29,6 +29,21 @@ onUnmounted(() => room.leave());
 async function exit() {
 	await room.leave();
 	router.push({ name: "home" });
+}
+
+const draft = ref("");
+const sending = ref(false);
+
+async function send() {
+	sending.value = true;
+
+	// Only clear the box if it actually went, so a failure does not lose what
+	// was typed.
+	if (await room.sendChat(draft.value)) {
+		draft.value = "";
+	}
+
+	sending.value = false;
 }
 </script>
 
@@ -64,6 +79,31 @@ async function exit() {
 				<div class="room__tiles">
 					<SpeakerTile v-for="user in room.audience.value" :key="user.user_id" :user="user" />
 				</div>
+			</section>
+
+			<section v-if="room.chat.enabled" class="room__chat">
+				<h2 class="room__heading">Chat</h2>
+
+				<p v-if="room.chat.error" class="room__chat-error">{{ room.chat.error }}</p>
+
+				<EmptyState v-else-if="!room.chat.messages.length" message="No messages yet." />
+
+				<ul v-else class="room__messages">
+					<li v-for="(message, i) in room.chat.messages" :key="message.message_id ?? i">
+						<strong>{{ message.user_profile?.name || message.name || "Someone" }}</strong>
+						<span>{{ message.message ?? message.text }}</span>
+					</li>
+				</ul>
+
+				<form v-if="room.chat.canPost" class="room__compose" @submit.prevent="send">
+					<input
+						v-model="draft"
+						placeholder="Say something"
+						aria-label="Chat message"
+						maxlength="500"
+					>
+					<button class="btn" type="submit" :disabled="!draft.trim() || sending">Send</button>
+				</form>
 			</section>
 
 			<footer class="room__bar">
@@ -135,5 +175,40 @@ async function exit() {
 	background: var(--surface);
 	border-radius: 999px;
 	box-shadow: var(--shadow);
+}
+.room__chat {
+	margin-top: 1.5rem;
+}
+
+.room__chat-error {
+	font-size: 0.8rem;
+	color: var(--danger);
+	margin: 0 0 0.5rem;
+}
+
+.room__messages {
+	list-style: none;
+	margin: 0 0 0.75rem;
+	padding: 0.5rem 0.75rem;
+	display: grid;
+	gap: 0.4rem;
+	max-height: 260px;
+	overflow-y: auto;
+	background: var(--surface-2);
+	border-radius: var(--radius-sm);
+	font-size: 0.85rem;
+}
+
+.room__messages strong {
+	margin-right: 0.4rem;
+}
+
+.room__compose {
+	display: flex;
+	gap: 0.5rem;
+}
+
+.room__compose input {
+	flex: 1;
 }
 </style>

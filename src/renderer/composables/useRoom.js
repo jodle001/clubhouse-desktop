@@ -16,9 +16,58 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 	const joining = ref(false);
 	const error = ref("");
 
+	const chat = reactive({ messages: [], enabled: false, canPost: false, error: "" });
+
 	let audio = null;
 	let events = null;
 	let pingTimer = null;
+	let chatTimer = null;
+
+	/**
+	 * Message lists come back oldest-first or newest-first depending on the
+	 * endpoint, and under more than one key. Take what is there.
+	 */
+	function messagesFrom(result) {
+		return result?.messages || result?.items || result?.chat_messages || [];
+	}
+
+	async function loadChat() {
+		const info = channel.info;
+		if (!info || !chat.enabled) {
+			return;
+		}
+
+		try {
+			const result = await call("getChatMessages", {
+				channel: info.channel,
+				channelId: info.channel_id
+			});
+
+			chat.messages = messagesFrom(result);
+			chat.error = "";
+		} catch (err) {
+			// Reported once, in place, rather than as a toast every poll.
+			chat.error = err.message;
+		}
+	}
+
+	async function sendChat(text) {
+		const body = String(text || "").trim();
+		const info = channel.info;
+
+		if (!body || !info) {
+			return false;
+		}
+
+		try {
+			await call("sendChatMessage", { channel: info.channel, message: body });
+			await loadChat();
+			return true;
+		} catch (err) {
+			chat.error = err.message;
+			return false;
+		}
+	}
 
 	const me = computed(() => channel.info?.users?.find(u => u.is_self) || null);
 	const speakers = computed(() => channel.users.filter(u => u.is_speaker));
@@ -94,6 +143,22 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			await events.subscribe(info);
 
 			pingTimer = setInterval(() => call("activePing", channelName).catch(() => {}), 30000);
+
+			// The server says whether this room has chat and whether we may
+			// post, so the UI follows its answer rather than assuming.
+			chat.enabled = Boolean(info.is_room_chat_available && info.is_chat_enabled);
+			chat.canPost = Boolean(info.user_capabilities?.can_post_to_chat);
+			chat.messages = [];
+			chat.error = "";
+
+			if (chat.enabled) {
+				await loadChat();
+				// Polled, because the PubNub action carrying live messages is
+				// not known yet - unhandled actions are logged now, so the next
+				// session in a chatty room should name it.
+				chatTimer = setInterval(loadChat, 10000);
+			}
+
 			return true;
 		} catch (err) {
 			error.value = err.message;
@@ -105,7 +170,14 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 
 	async function leave() {
 		clearInterval(pingTimer);
+		clearInterval(chatTimer);
 		pingTimer = null;
+		chatTimer = null;
+
+		chat.messages = [];
+		chat.enabled = false;
+		chat.canPost = false;
+		chat.error = "";
 
 		const name = channel.info?.channel;
 
@@ -145,6 +217,7 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 
 	return {
 		channel,
+		chat,
 		speakers,
 		audience,
 		me,
@@ -155,6 +228,8 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		speakingUids,
 		join,
 		leave,
+		loadChat,
+		sendChat,
 		toggleMute,
 		toggleHand,
 		// exposed for tests

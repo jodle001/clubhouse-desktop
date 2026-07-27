@@ -67,11 +67,13 @@ export class FakeRoomEvents extends NullRoomEvents {
 		this.subscribed = null;
 	}
 
-	/** Deliver a message as PubNub would. */
+	/** Deliver a message as PubNub would - including actions we do not know. */
 	deliver(message) {
-		if (ACTIONS.includes(message.action)) {
-			this.emit(message.action, message);
+		if (!message?.action) {
+			return;
 		}
+
+		this.emit(message.action, message);
 	}
 }
 
@@ -101,9 +103,19 @@ export class PubNubRoomEvents extends Emitter {
 
 		this._pubnub.addListener({
 			message: ({ message }) => {
-				if (message && ACTIONS.includes(message.action)) {
-					this.emit(message.action, message);
+				if (!message?.action) {
+					return;
 				}
+
+				// Every action is emitted, not just the known ones. The old
+				// allowlist bought nothing - an action with no handler is a
+				// no-op either way - and silently swallowed everything the 2021
+				// client never knew about, which is where live chat will be.
+				if (!ACTIONS.includes(message.action)) {
+					this.log(`[room:pubnub] unhandled action "${message.action}" ${JSON.stringify(message).slice(0, 300)}`);
+				}
+
+				this.emit(message.action, message);
 			},
 			status: event => this.log(`[room:pubnub] ${event.category}`)
 		});

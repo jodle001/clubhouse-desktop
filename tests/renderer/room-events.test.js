@@ -28,11 +28,29 @@ describe("room events port", () => {
 		expect(seen).toEqual([["join_channel", 1], ["raise_hands", 2]]);
 	});
 
-	it("ignores unknown actions", () => {
+	it("does not cross wires between actions", () => {
 		const events = new FakeRoomEvents();
 		let called = false;
 		events.on("join_channel", () => (called = true));
 		events.deliver({ action: "something_new", user_id: 1 });
 		expect(called).toBe(false);
+	});
+
+	it("delivers actions it has never heard of", () => {
+		// The old allowlist dropped anything the 2021 client did not know,
+		// which is why live chat could not be found. Unknown actions are
+		// emitted now, and logged by the PubNub adapter.
+		const events = new FakeRoomEvents();
+		const seen = [];
+		events.on("channel_message", m => seen.push(m.text));
+
+		events.deliver({ action: "channel_message", text: "hello" });
+		expect(seen).toEqual(["hello"]);
+	});
+
+	it("ignores a message with no action at all", () => {
+		const events = new FakeRoomEvents();
+		expect(() => events.deliver({})).not.toThrow();
+		expect(() => events.deliver(null)).not.toThrow();
 	});
 });
