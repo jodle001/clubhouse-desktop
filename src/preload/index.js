@@ -32,6 +32,7 @@ const API_METHODS = [
 	"getFeed",
 	"joinChannel",
 	"sendChatMessage",
+	"getChannelMessages",
 	"leaveChannel",
 	"activePing",
 	"createChannel",

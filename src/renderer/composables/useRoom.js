@@ -26,18 +26,53 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 	/** Keeps a long room from growing the list without bound. */
 	const MAX_MESSAGES = 200;
 
-	/** A PubNub new_channel_message, in the shape the UI renders. */
-	function chatEntry(event) {
+	/**
+	 * One chat message, in the shape the UI renders.
+	 *
+	 * Handles both layouts: PubNub carries the author as flat from_* fields,
+	 * while a REST history is more likely to nest a user_profile. Taking either
+	 * means history and live messages render identically.
+	 */
+	function chatEntry(raw) {
 		return {
-			message_id: event.message_id,
-			message: event.message,
-			user_profile: {
-				user_id: event.from_user_id,
-				name: event.from_name,
-				username: event.from_username,
-				photo_url: event.from_photo_url
+			message_id: raw.message_id,
+			message: raw.message ?? raw.text,
+			time_created: raw.time_created,
+			user_profile: raw.user_profile || {
+				user_id: raw.from_user_id,
+				name: raw.from_name,
+				username: raw.from_username,
+				photo_url: raw.from_photo_url
 			}
 		};
+	}
+
+	/** Whatever key the list arrives under. */
+	function messagesFrom(result) {
+		return result?.messages || result?.items || result?.chat_messages || [];
+	}
+
+	/**
+	 * The conversation from before you walked in. Oldest first, since the API
+	 * may hand them back either way round and the panel reads downwards.
+	 */
+	async function loadHistory(channelName) {
+		try {
+			const result = await call("getChannelMessages", { channel: channelName });
+			const history = messagesFrom(result).map(chatEntry);
+
+			history.sort((a, b) => String(a.time_created ?? "").localeCompare(String(b.time_created ?? "")));
+
+			for (const entry of history) {
+				addMessage(entry);
+			}
+
+			chat.error = "";
+		} catch (err) {
+			// Not fatal - live messages still arrive over PubNub, so say what
+			// happened and carry on rather than emptying the panel.
+			chat.error = err.message;
+		}
 	}
 
 	/** Long enough to cover a round trip, short enough to allow a repeat. */
@@ -198,6 +233,12 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			chat.canPost = Boolean(info.user_capabilities?.can_post_to_chat);
 			chat.messages = [];
 			chat.error = "";
+
+			if (chat.enabled) {
+				// After subscribing, so anything said while this was in flight
+				// still arrives; addMessage dedupes by message_id.
+				await loadHistory(channelName);
+			}
 
 			return true;
 		} catch (err) {

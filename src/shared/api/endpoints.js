@@ -68,15 +68,13 @@ export const endpoints = {
 	getFeed: (c, body = {}) => c.request("/get_feed_v3", { body }),
 
 	/**
-	 * Chat history, and unsolved. The path exists - a POST answers 405, so it
-	 * is a GET - but it rejects `channel`, `channel_id` and both together with
-	 * 400 and an empty error_message, from inside the room and outside it. The
-	 * app does not call it: live messages arrive over PubNub as
-	 * `new_channel_message`, so the only thing missing is history from before
-	 * you walked in. Kept for `npm run probe` to keep poking at.
+	 * Chat history. A POST answers 405, so it is a GET, and asked without one
+	 * it says "Channel is required." - the same way /send_channel_message named
+	 * its fields, and unlike /get_chat_messages, which rejects every shape tried
+	 * with an empty error_message and names nothing.
 	 */
-	getChatMessages: (c, { channel, channelId } = {}) =>
-		c.request("/get_chat_messages", { query: { channel, channel_id: channelId } }),
+	getChannelMessages: (c, { channel } = {}) =>
+		c.request("/get_channel_messages", { query: { channel } }),
 
 	/** `{ channel, message }` - the API named `message` itself, on a 400. */
 	sendChatMessage: (c, { channel, message } = {}) =>

@@ -60,6 +60,7 @@ beforeEach(() => {
 	bridge.api.joinChannel = vi.fn().mockResolvedValue({ ok: true, data: joinResult() });
 	bridge.api.leaveChannel = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
 	bridge.api.sendChatMessage = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+	bridge.api.getChannelMessages = vi.fn().mockResolvedValue({ ok: true, data: { messages: [] } });
 });
 
 afterEach(() => vi.useRealTimers());
@@ -76,15 +77,81 @@ describe("room chat", () => {
 		expect(room.chat.messages[0].user_profile.name).toBe("Bill Brown");
 	});
 
-	it("never fetches history, which the API rejects with an empty 400", async () => {
-		bridge.api.getChatMessages = vi.fn();
+	it("asks for history once on joining, not on a poll", async () => {
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+
+		expect(bridge.api.getChannelMessages).toHaveBeenCalledWith({ channel: "PAKBKoJ7" });
+
+		await vi.advanceTimersByTimeAsync(60000);
+		expect(bridge.api.getChannelMessages).toHaveBeenCalledTimes(1);
+	});
+
+	it("reads a history entry that nests its author, as REST is likely to", async () => {
+		bridge.api.getChannelMessages = vi.fn().mockResolvedValue({
+			ok: true,
+			data: {
+				messages: [
+					{
+						message_id: "h1",
+						message: "said earlier",
+						time_created: "2026-07-27T10:00:00Z",
+						user_profile: { user_id: 5, name: "Someone", username: "someone" }
+					}
+				]
+			}
+		});
 
 		const room = makeRoom();
 		await room.join("PAKBKoJ7", { userId: ME });
-		await vi.advanceTimersByTimeAsync(60000);
 
-		// It used to poll this every ten seconds, for a 400 every time.
-		expect(bridge.api.getChatMessages).not.toHaveBeenCalled();
+		expect(room.chat.messages).toHaveLength(1);
+		expect(room.chat.messages[0].message).toBe("said earlier");
+		expect(room.chat.messages[0].user_profile.name).toBe("Someone");
+	});
+
+	it("puts history oldest first, whichever order it arrives in", async () => {
+		bridge.api.getChannelMessages = vi.fn().mockResolvedValue({
+			ok: true,
+			data: {
+				messages: [
+					{ message_id: "b", message: "later", time_created: "2026-07-27T12:00:00Z" },
+					{ message_id: "a", message: "earlier", time_created: "2026-07-27T10:00:00Z" }
+				]
+			}
+		});
+
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+
+		expect(room.chat.messages.map(m => m.message)).toEqual(["earlier", "later"]);
+	});
+
+	it("does not repeat a message that history and PubNub both carry", async () => {
+		bridge.api.getChannelMessages = vi.fn().mockResolvedValue({
+			ok: true,
+			data: { messages: [{ message_id: "dup", message: "hello", time_created: "2026-07-27T10:00:00Z" }] }
+		});
+
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+		events.deliver(messageEvent({ message_id: "dup", message: "hello" }));
+
+		expect(room.chat.messages).toHaveLength(1);
+	});
+
+	it("stays usable when history fails, since live messages do not need it", async () => {
+		bridge.api.getChannelMessages = vi
+			.fn()
+			.mockResolvedValue({ ok: false, error: { message: "Channel is required.", status: 400 } });
+
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+
+		expect(room.chat.error).toBe("Channel is required.");
+
+		events.deliver(messageEvent());
+		expect(room.chat.messages).toHaveLength(1);
 	});
 
 	it("ignores a message it has already shown", async () => {

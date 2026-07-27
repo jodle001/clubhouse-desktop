@@ -146,6 +146,7 @@ routed at all.
 | `/get_following`, `/get_followers` | gone, no known replacement |
 | `/get_profile`, `/search_users` | fine |
 | `POST /send_channel_message` | alive - `{ channel, message }` |
+| `GET /get_channel_messages` | alive - chat history, `?channel=` |
 | `GET /get_chat_messages` | exists, but rejects everything tried |
 
 The home screen reads rooms out of the feed: `/get_feed_v3` answers
@@ -154,9 +155,11 @@ object carrying the fields `/get_channels` used to return. Other item kinds turn
 up in that list, so anything without a `channel` is skipped.
 
 Room chat arrives over PubNub as a `new_channel_message` action, carrying the
-author inline. History is the one gap: `/get_chat_messages` exists but answers
-400 with an empty `error_message` for every parameter tried, so you see the
-conversation from the moment you walk in and not before.
+author inline, and history comes from `/get_channel_messages?channel=`. Note the
+near-miss: `/get_chat_messages` also exists but rejects every shape tried with an
+empty `error_message`, while `/get_channel_messages` names what it wants - and
+pairs with `/send_channel_message`. An endpoint that says what is missing is
+worth more than one that only says no.
 
 The screens built on retired endpoints have been removed rather than left to
 report a 404: notifications, the followers and following lists, and events. The

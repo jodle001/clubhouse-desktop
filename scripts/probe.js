@@ -246,16 +246,17 @@ const extra = names.map(name => ({
 }));
 
 /**
- * Chat history is the one room feature still missing. /get_chat_messages
- * exists - a POST answers 405 - but rejects `channel`, `channel_id` and both
- * together with 400 and an empty error_message, which names nothing. So try the
- * plausible shapes in one run rather than one command per guess.
+ * Chat history. Two candidates, and they behave differently: /get_chat_messages
+ * rejects everything with 400 and an empty error_message, naming nothing, while
+ * /get_channel_messages answers "Channel is required." - the same way
+ * /send_channel_message named its fields. The pair also reads right:
+ * send_channel_message and get_channel_messages. Try the plausible shapes of
+ * both in one run rather than one command per guess.
  */
 const historyAttempts = [];
 if (channel) {
 	const id = params.channel_id;
-
-	for (const query of [
+	const shapes = [
 		{ channel },
 		{ channel, count: 50 },
 		{ channel, page_size: 50 },
@@ -267,8 +268,12 @@ if (channel) {
 				{ channel, channel_id: id, count: 50 }
 			]
 			: [])
-	]) {
-		historyAttempts.push({ path: "/get_chat_messages", method: "GET", query });
+	];
+
+	for (const path of ["/get_channel_messages", "/get_chat_messages"]) {
+		for (const query of shapes) {
+			historyAttempts.push({ path, method: "GET", query });
+		}
 	}
 }
 
