@@ -40,24 +40,37 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		};
 	}
 
+	/** Long enough to cover a round trip, short enough to allow a repeat. */
+	const ECHO_WINDOW_MS = 15000;
+
+	const sameLine = (a, b) =>
+		a.message === b.message && a.user_profile?.user_id === b.user_profile?.user_id;
+
+	/**
+	 * Your own message is shown the moment it is accepted, and the same message
+	 * also comes back over PubNub. Either can arrive first: the echo often wins,
+	 * because it is published while the send request is still resolving. So
+	 * reconcile in both directions rather than only replacing a pending entry -
+	 * that assumption is what made every sent message appear twice.
+	 */
 	function addMessage(entry, { pending = false } = {}) {
 		if (entry.message_id && chat.messages.some(m => m.message_id === entry.message_id)) {
 			return;
 		}
 
-		// Our own message is shown immediately, then reconciled when it comes
-		// back over PubNub - otherwise it would appear twice, or not at all if
-		// the sender is not echoed.
-		const mine = chat.messages.findIndex(
-			m => m.pending && m.message === entry.message && m.user_profile?.user_id === entry.user_profile?.user_id
-		);
-
-		if (mine !== -1) {
-			chat.messages[mine] = entry;
+		const waiting = chat.messages.findIndex(m => m.pending && sameLine(m, entry));
+		if (waiting !== -1) {
+			chat.messages[waiting] = { ...entry, pending: false, at: chat.messages[waiting].at };
 			return;
 		}
 
-		chat.messages.push({ ...entry, pending });
+		// The echo got here first, so there is nothing to show optimistically.
+		// Time-bounded, so deliberately saying the same thing again still shows.
+		if (pending && chat.messages.some(m => sameLine(m, entry) && Date.now() - (m.at ?? 0) < ECHO_WINDOW_MS)) {
+			return;
+		}
+
+		chat.messages.push({ ...entry, pending, at: Date.now() });
 
 		if (chat.messages.length > MAX_MESSAGES) {
 			chat.messages.splice(0, chat.messages.length - MAX_MESSAGES);

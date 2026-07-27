@@ -121,7 +121,7 @@ describe("room chat", () => {
 		expect(room.chat.messages[0].message).toBe("hello");
 	});
 
-	it("does not show your own message twice when it echoes back", async () => {
+	it("does not show your own message twice when the echo arrives after", async () => {
 		const room = makeRoom();
 		await room.join("PAKBKoJ7", { userId: ME });
 
@@ -130,7 +130,38 @@ describe("room chat", () => {
 
 		expect(room.chat.messages).toHaveLength(1);
 		expect(room.chat.messages[0].message_id).toBe("srv-1");
-		expect(room.chat.messages[0].pending).toBeUndefined();
+		expect(room.chat.messages[0].pending).toBe(false);
+	});
+
+	it("does not show it twice when the echo arrives first either", async () => {
+		// PubNub often publishes before the send request resolves, so this is
+		// the ordering that actually happens - and the one that used to double
+		// every message.
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+
+		bridge.api.sendChatMessage = vi.fn(() => {
+			events.deliver(
+				messageEvent({ from_user_id: ME, from_name: "Daily Shadow", message: "hello", message_id: "srv-2" })
+			);
+			return Promise.resolve({ ok: true, data: { success: true } });
+		});
+
+		await room.sendChat("hello");
+
+		expect(room.chat.messages).toHaveLength(1);
+		expect(room.chat.messages[0].message_id).toBe("srv-2");
+	});
+
+	it("still shows the same words said again later", async () => {
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+
+		events.deliver(messageEvent({ from_user_id: ME, message: "ok", message_id: "a" }));
+		vi.setSystemTime(Date.now() + 60000);
+		await room.sendChat("ok");
+
+		expect(room.chat.messages).toHaveLength(2);
 	});
 
 	it("refuses to send an empty message", async () => {

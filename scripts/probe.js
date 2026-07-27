@@ -206,26 +206,78 @@ function shapeOf(value, indent = "  ", depth = 0) {
 
 const session = loadSession();
 const args = process.argv.slice(2);
-const wantsShape = args.includes("--shape");
 
-// --channel PAKBKoJ7 - room endpoints need one, and an endpoint asked for a
-// channel and nothing else will name its next required field in the error.
-const channelFlag = args.indexOf("--channel");
-const channel = channelFlag === -1 ? null : args[channelFlag + 1];
-const names = args.filter((arg, i) => !arg.startsWith("--") && i !== channelFlag + 1);
+/**
+ * --shape                      print structure instead of a verdict
+ * --channel PAKBKoJ7           room endpoints need one, and an endpoint asked
+ *                              for a channel and nothing else will name its
+ *                              next required field in the error
+ * --param key=value            any other parameter, repeatable
+ * name [name...]               endpoints to try on top of the built-in list
+ */
+const params = {};
+const names = [];
+let wantsShape = false;
+let channel = null;
+
+for (let i = 0; i < args.length; i++) {
+	const arg = args[i];
+
+	if (arg === "--shape") {
+		wantsShape = true;
+	} else if (arg === "--channel") {
+		channel = args[++i];
+	} else if (arg === "--param") {
+		const [key, ...rest] = String(args[++i] ?? "").split("=");
+		if (key) {
+			params[key] = rest.join("=");
+		}
+	} else if (!arg.startsWith("--")) {
+		names.push(arg);
+	}
+}
+
+const given = { ...params, ...(channel ? { channel } : {}) };
 
 const extra = names.map(name => ({
 	path: name.startsWith("/") ? name : `/${name}`,
 	method: "POST",
-	body: channel ? { channel } : {}
+	body: given
 }));
+
+/**
+ * Chat history is the one room feature still missing. /get_chat_messages
+ * exists - a POST answers 405 - but rejects `channel`, `channel_id` and both
+ * together with 400 and an empty error_message, which names nothing. So try the
+ * plausible shapes in one run rather than one command per guess.
+ */
+const historyAttempts = [];
+if (channel) {
+	const id = params.channel_id;
+
+	for (const query of [
+		{ channel },
+		{ channel, count: 50 },
+		{ channel, page_size: 50 },
+		{ channel, limit: 50 },
+		...(id
+			? [
+				{ channel_id: id },
+				{ channel_id: id, count: 50 },
+				{ channel, channel_id: id, count: 50 }
+			]
+			: [])
+	]) {
+		historyAttempts.push({ path: "/get_chat_messages", method: "GET", query });
+	}
+}
 
 console.log(`\nIdentity: ${APP_IDENTITY.userAgent} ${APP_IDENTITY.appVersion} (${APP_IDENTITY.appBuild})`);
 console.log(`Signed in as user ${session.userId ?? "(unknown)"}\n`);
 
 const alive = [];
 // --shape only makes sense for endpoints actually asked for.
-const targets = wantsShape ? extra : [...CANDIDATES, ...extra];
+const targets = wantsShape ? extra : [...CANDIDATES, ...historyAttempts, ...extra];
 
 if (wantsShape && extra.length === 0) {
 	console.error("--shape needs an endpoint, e.g. npm run probe -- --shape get_feed_v3\n");
@@ -265,7 +317,11 @@ function otherMethod(candidate) {
 }
 
 for (const candidate of targets) {
-	const label = `${candidate.method} ${candidate.path}`.padEnd(46);
+	// Several attempts can share a path and differ only in parameters, so name
+	// them by what was sent.
+	const sent = Object.keys(candidate.query || candidate.body || {});
+	const suffix = sent.length ? ` ?${sent.join("&")}` : "";
+	const label = `${candidate.method} ${candidate.path}${suffix}`.padEnd(52);
 
 	try {
 		let used = candidate;
