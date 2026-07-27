@@ -212,3 +212,47 @@ describe("room chat", () => {
 		expect(room.chat.enabled).toBe(false);
 	});
 });
+
+describe("room counters", () => {
+	it("tracks how many have passed through the room", async () => {
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+
+		events.deliver({ action: "cumulative_count_update", num_ever: 219, channel: "PAKBKoJ7" });
+		expect(room.everCount.value).toBe(219);
+
+		events.deliver({ action: "cumulative_count_update", num_ever: 220, channel: "PAKBKoJ7" });
+		expect(room.everCount.value).toBe(220);
+	});
+
+	it("keeps the last count when an update omits it", async () => {
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+
+		events.deliver({ action: "cumulative_count_update", num_ever: 5, channel: "PAKBKoJ7" });
+		events.deliver({ action: "cumulative_count_update", channel: "PAKBKoJ7" });
+
+		expect(room.everCount.value).toBe(5);
+	});
+
+	it("resets on leaving", async () => {
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+		events.deliver({ action: "cumulative_count_update", num_ever: 42, channel: "PAKBKoJ7" });
+
+		await room.leave();
+		expect(room.everCount.value).toBe(0);
+	});
+});
+
+describe("unrecognised actions", () => {
+	it("logs only what nothing is listening for", () => {
+		// Reported on whether a handler exists, not against a list, so handling
+		// an action stops the noise with nothing else to update.
+		const events = new FakeRoomEvents();
+		expect(events.hasHandlers("brand_new_thing")).toBe(false);
+
+		events.on("brand_new_thing", () => {});
+		expect(events.hasHandlers("brand_new_thing")).toBe(true);
+	});
+});

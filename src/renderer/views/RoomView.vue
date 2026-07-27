@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted, ref } from "vue";
+import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useRoom } from "../composables/useRoom.js";
 import { useSession } from "../composables/useSession.js";
@@ -33,6 +33,28 @@ async function exit() {
 
 const draft = ref("");
 const sending = ref(false);
+const log = ref(null);
+
+/**
+ * Follow the conversation, but only when already at the bottom - yanking the
+ * view down while somebody is reading back is worse than missing a line.
+ */
+watch(
+	() => room.chat.messages.length,
+	async () => {
+		const box = log.value;
+		if (!box) {
+			return;
+		}
+
+		const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+		await nextTick();
+
+		if (atBottom) {
+			box.scrollTop = box.scrollHeight;
+		}
+	}
+);
 
 async function send() {
 	sending.value = true;
@@ -55,6 +77,9 @@ async function send() {
 			<header class="room__header">
 				<div class="grow">
 					<h1 class="room__topic">{{ room.channel.info.topic || "Untitled room" }}</h1>
+					<p v-if="room.everCount.value" class="muted room__ever">
+						{{ room.everCount.value }} have dropped in since it opened
+					</p>
 					<p v-if="!state.settings.audioEnabled" class="muted room__silent">
 						Audio is off — enable it in Settings to hear the room.
 					</p>
@@ -88,7 +113,7 @@ async function send() {
 
 				<EmptyState v-else-if="!room.chat.messages.length" message="No messages yet." />
 
-				<ul v-else class="room__messages">
+				<ul v-else ref="log" class="room__messages">
 					<li v-for="(message, i) in room.chat.messages" :key="message.message_id ?? i">
 						<strong>{{ message.user_profile?.name || message.name || "Someone" }}</strong>
 						<span>{{ message.message ?? message.text }}</span>
@@ -143,6 +168,11 @@ async function send() {
 .room__topic {
 	margin: 0;
 	font-size: 1.35rem;
+}
+
+.room__ever {
+	margin: 0.3rem 0 0;
+	font-size: 0.8rem;
 }
 
 .room__silent {

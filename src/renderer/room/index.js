@@ -4,6 +4,11 @@
  * still opens and lists its speakers even when live updates are unavailable.
  */
 
+/**
+ * Actions seen in the wild. Documentation, not a filter - anything that arrives
+ * is emitted, and the adapter logs whatever nothing is listening for, which is
+ * how the last two on this list were found.
+ */
 const ACTIONS = [
 	"join_channel",
 	"leave_channel",
@@ -13,7 +18,9 @@ const ACTIONS = [
 	"make_moderator",
 	"invite_speaker",
 	"raise_hands",
-	"unraise_hands"
+	"unraise_hands",
+	"new_channel_message",
+	"cumulative_count_update"
 ];
 
 class Emitter {
@@ -34,6 +41,10 @@ class Emitter {
 		for (const handler of this._handlers.get(event) || []) {
 			handler(payload);
 		}
+	}
+
+	hasHandlers(event) {
+		return (this._handlers.get(event)?.size ?? 0) > 0;
 	}
 }
 
@@ -110,9 +121,13 @@ export class PubNubRoomEvents extends Emitter {
 				// Every action is emitted, not just the known ones. The old
 				// allowlist bought nothing - an action with no handler is a
 				// no-op either way - and silently swallowed everything the 2021
-				// client never knew about, which is where live chat will be.
-				if (!ACTIONS.includes(message.action)) {
-					this.log(`[room:pubnub] unhandled action "${message.action}" ${JSON.stringify(message).slice(0, 300)}`);
+				// client never knew about, which is where live chat was found.
+				//
+				// Logged on whether anything is actually listening, not against
+				// a list: handle an action and it stops being reported, with no
+				// second place to remember to update.
+				if (!this.hasHandlers(message.action)) {
+					this.log(`[room:pubnub] no handler for "${message.action}" ${JSON.stringify(message).slice(0, 300)}`);
 				}
 
 				this.emit(message.action, message);

@@ -14,6 +14,7 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 	const muted = ref(true);
 	const handRaised = ref(false);
 	const joining = ref(false);
+	const everCount = ref(0);
 	const error = ref("");
 
 	const chat = reactive({ messages: [], enabled: false, canPost: false, error: "" });
@@ -168,6 +169,12 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			// dropping - it carries the author inline, so no lookup is needed.
 			events.on("new_channel_message", event => addMessage(chatEntry(event)));
 
+			// How many people have passed through since the room opened, which
+			// is a different and more interesting number than who is here now.
+			events.on("cumulative_count_update", event => {
+				everCount.value = event.num_ever ?? everCount.value;
+			});
+
 			await events.subscribe(info);
 
 			pingTimer = setInterval(() => call("activePing", channelName).catch(() => {}), 30000);
@@ -192,6 +199,7 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		clearInterval(pingTimer);
 		pingTimer = null;
 
+		everCount.value = 0;
 		chat.messages = [];
 		chat.enabled = false;
 		chat.canPost = false;
@@ -241,6 +249,7 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		me,
 		muted,
 		handRaised,
+		everCount,
 		joining,
 		error,
 		speakingUids,
