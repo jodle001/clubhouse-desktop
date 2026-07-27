@@ -81,8 +81,35 @@ const CANDIDATES = [
 	{ path: "/get_notifications", method: "GET", query: { page: 1, page_size: 20 } },
 	{ path: "/get_actionable_notifications", method: "GET", query: {} },
 	{ path: "/get_suggested_follows_friends_only", method: "POST", body: { page: 1, page_size: 25 } },
-	{ path: "/get_following", method: "GET", query: { user_id: 0, page: 1, page_size: 25 } }
+	{ path: "/get_following", method: "GET", query: { user_id: 0, page: 1, page_size: 25 } },
+
+	// --- profiles and following ---------------------------------------
+	{ path: "/get_profile", method: "POST", body: {} },
+	{ path: "/search_users", method: "POST", body: { query: "a" } },
+	{ path: "/get_user_following", method: "POST", body: {} },
+	{ path: "/get_user_followers", method: "POST", body: {} },
+	{ path: "/get_following_v2", method: "POST", body: {} },
+	{ path: "/get_followers_v2", method: "POST", body: {} },
+	{ path: "/get_suggested_follows_all", method: "GET", query: { in_onboarding: false, page: 1, page_size: 10 } },
+
+	// --- room chat ------------------------------------------------------
+	// join_channel reports is_room_chat_available and can_post_to_chat, so the
+	// feature exists; only its endpoint names are unknown.
+	{ path: "/get_chat_messages", method: "POST", body: {} },
+	{ path: "/get_channel_messages", method: "POST", body: {} },
+	{ path: "/get_room_chat_messages", method: "POST", body: {} },
+	{ path: "/send_chat_message", method: "POST", body: {} },
+	{ path: "/send_channel_message", method: "POST", body: {} },
+
+	// --- activity -------------------------------------------------------
+	{ path: "/get_activity", method: "POST", body: {} },
+	{ path: "/get_notifications_v2", method: "POST", body: {} },
+	{ path: "/get_channel", method: "POST", body: {} }
 ];
+
+// Everything above is sent with an empty or read-only body on purpose: an
+// endpoint that needs arguments answers 400, which proves it exists without
+// following anyone or posting anything.
 
 function describe(status, contentType, text) {
 	const flat = text.replace(/\s+/g, " ").trim();
@@ -97,8 +124,16 @@ function describe(status, contentType, text) {
 
 	try {
 		const data = JSON.parse(flat);
+
+		// A 4xx from a real endpoint means it exists and wants different
+		// arguments - useful, and quite different from a missing path.
+		if (status >= 400) {
+			const why = data.error_message || data.detail || "";
+			return `ALIVE, rejected the call${why ? `: ${String(why).slice(0, 60)}` : ""}`;
+		}
+
 		const keys = Object.keys(data).slice(0, 6).join(", ");
-		return `JSON { ${keys}${Object.keys(data).length > 6 ? ", ..." : ""} }`;
+		return `ALIVE { ${keys}${Object.keys(data).length > 6 ? ", ..." : ""} }`;
 	} catch {
 		return `unparseable: ${flat.slice(0, 60)}`;
 	}
