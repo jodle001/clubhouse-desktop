@@ -13,10 +13,12 @@
  */
 
 const https = require("https");
+const http = require("http");
 const { URL } = require("url");
 
 const PROFILE = {
-	apiRoot: "https://www.clubhouseapi.com/api",
+	// Overridable so the script can be pointed at a stub while testing it.
+	apiRoot: process.env.CLUBHOUSE_API_ROOT || "https://www.clubhouseapi.com/api",
 	userAgent: "clubhouse/304 (iPhone; iOS 14.4; Scale/2.00)",
 	appVersion: "0.1.28",
 	appBuild: "304"
@@ -24,22 +26,27 @@ const PROFILE = {
 
 const TIMEOUT_MS = 15000;
 
-function request(path) {
+function request(path, overrides) {
+	const build = (overrides && overrides.appBuild) || PROFILE.appBuild;
+	const version = (overrides && overrides.appVersion) || PROFILE.appVersion;
+
 	return new Promise(resolve => {
 		const url = new URL(PROFILE.apiRoot + path);
 		const started = Date.now();
+		const transport = url.protocol === "http:" ? http : https;
 
-		const req = https.request(
+		const req = transport.request(
 			{
 				method: "GET",
 				hostname: url.hostname,
+				port: url.port || undefined,
 				path: url.pathname + url.search,
 				headers: {
-					"User-Agent": PROFILE.userAgent,
+					"User-Agent": PROFILE.userAgent.replace(PROFILE.appBuild, build),
 					"CH-Languages": "en-US",
 					"CH-Locale": "en_US",
-					"CH-AppVersion": PROFILE.appVersion,
-					"CH-AppBuild": PROFILE.appBuild,
+					"CH-AppVersion": version,
+					"CH-AppBuild": build,
 					"CH-DeviceId": "00000000-0000-0000-0000-000000000000",
 					"CH-UserID": "(null)",
 					Accept: "application/json",
@@ -113,11 +120,69 @@ function heading(text) {
 		);
 		process.exitCode = 1;
 	} else if (result.status >= 200 && result.status < 300) {
-		console.log(
-			"\nThe endpoint answered. Note that a 2xx here does not guarantee that\n" +
-				"login or joining rooms still works - those need a valid account and\n" +
-				"may be rejected separately for using an outdated app build."
-		);
+		let parsed = null;
+		try {
+			parsed = JSON.parse(result.body);
+		} catch (_) {
+			// fall through to the generic message below
+		}
+
+		if (parsed && parsed.has_update) {
+			heading("Verdict");
+			console.log(
+				`This client identifies as build ${PROFILE.appBuild}; the API reports the` +
+					`\ncurrent build as ${parsed.app_build} (${parsed.app_version}).`
+			);
+
+			if (parsed.is_mandatory) {
+				console.log(
+					"\nThe upgrade is flagged MANDATORY. In the official app that means a\n" +
+						"forced-upgrade wall. Whether the API also enforces it server-side on\n" +
+						"the auth endpoints is not something check_for_update can answer - the\n" +
+						"only way to find out is to attempt a sign-in, which sends a real SMS."
+				);
+			}
+
+			// Ask again as the build the API just told us is current. This is a
+			// read-only probe - it only reveals whether the upgrade demand tracks
+			// the build headers at all.
+			const asCurrent = await request("/check_for_update?is_testflight=0", {
+				appBuild: String(parsed.app_build),
+				appVersion: String(parsed.app_version).split(" ")[0]
+			});
+
+			let current = null;
+			try {
+				current = JSON.parse(asCurrent.body);
+			} catch (_) {
+				// ignore
+			}
+
+			console.log(
+				`\nRe-probed as build ${parsed.app_build}: HTTP ${asCurrent.status}` +
+					(current ? `, has_update=${current.has_update}` : "")
+			);
+
+			if (current && current.has_update === false) {
+				console.log(
+					"The upgrade demand goes away purely by changing the build headers, so\n" +
+						"the check is header-based. Updating this client's app profile is\n" +
+						"therefore worth trying, though it is not proof that auth will pass."
+				);
+			} else if (current && current.has_update) {
+				console.log(
+					"The API still reports an update even for the build it just called\n" +
+						"current, which suggests check_for_update is stale rather than a real\n" +
+						"gate. Weak evidence that the build headers matter less than they look."
+				);
+			}
+		} else {
+			console.log(
+				"\nThe endpoint answered and reports no required update. Note that this\n" +
+					"does not guarantee login or joining rooms works - those need a valid\n" +
+					"account and may be rejected separately."
+			);
+		}
 	} else if (result.status === 401 || result.status === 403) {
 		console.log(
 			"\nThe API rejected this app build. Clubhouse is refusing requests that\n" +
