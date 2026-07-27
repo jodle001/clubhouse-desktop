@@ -204,3 +204,38 @@ describe("ProfileView", () => {
 		expect(wrapper.findAll(".profile__actions button")).toHaveLength(0);
 	});
 });
+
+describe("mutual follows", () => {
+	it("expands the full list on demand, and collapses again", async () => {
+		bridge.api.getMutualFollows = vi.fn().mockResolvedValue({
+			ok: true,
+			data: { users: [{ user_id: 11, name: "Carol", username: "carol" }] }
+		});
+
+		const wrapper = mountProfile();
+		await settle(wrapper);
+
+		// Not fetched until asked - 23 mutuals is a request nobody needed yet.
+		expect(bridge.api.getMutualFollows).not.toHaveBeenCalled();
+
+		await wrapper.find(".profile__mutual").trigger("click");
+		await settle(wrapper);
+
+		expect(bridge.api.getMutualFollows).toHaveBeenCalledWith(THEM);
+		expect(wrapper.find(".profile__mutual-list").text()).toContain("Carol");
+
+		await wrapper.find(".profile__mutual").trigger("click");
+		expect(wrapper.find(".profile__mutual-list").exists()).toBe(false);
+	});
+
+	it("says plainly when there is nobody in common", async () => {
+		bridge.api.getMutualFollows = vi.fn().mockResolvedValue({ ok: true, data: { users: [] } });
+
+		const wrapper = mountProfile();
+		await settle(wrapper);
+		await wrapper.find(".profile__mutual").trigger("click");
+		await settle(wrapper);
+
+		expect(wrapper.text()).toContain("Nobody in common.");
+	});
+});

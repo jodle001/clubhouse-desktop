@@ -5,14 +5,19 @@ defineProps({
 	user: { type: Object, required: true },
 	speaking: { type: Boolean, default: false }
 });
+
+// The room decides what opening a profile means - here it is a sheet, not a
+// link, because navigating away would leave the channel.
+const emit = defineEmits(["select"]);
 </script>
 
 <template>
-	<RouterLink
-		:to="{ name: 'user', params: { id: user.user_id } }"
+	<button
+		type="button"
 		class="tile"
 		:class="{ 'tile--speaking': speaking }"
 		:title="user.name"
+		@click="emit('select', user)"
 	>
 		<div class="tile__avatar">
 			<AppAvatar :user="user" :size="76" />
@@ -24,12 +29,15 @@ defineProps({
 			{{ user.first_name || user.name }}
 		</span>
 		<small class="muted truncate">@{{ user.username }}</small>
-	</RouterLink>
+	</button>
 </template>
 
 <style scoped>
 .tile {
 	display: flex;
+	border: 0;
+	background: none;
+	font: inherit;
 	color: inherit;
 	cursor: pointer;
 	border-radius: var(--radius-sm);

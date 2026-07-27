@@ -26,6 +26,7 @@ const API_METHODS = [
 	"block",
 	"unblock",
 	"getBlockedUsers",
+	"getMutualFollows",
 	"searchUsers",
 	// clubs & events
 	"getClub",

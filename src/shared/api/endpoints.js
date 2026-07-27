@@ -48,6 +48,9 @@ export const endpoints = {
 
 	getBlockedUsers: c => c.request("/get_blocked_users", { body: {} }),
 
+	/** The people you and they both follow. Also named `user_id` on a 400. */
+	getMutualFollows: (c, userId) => c.request("/get_mutual_follows", { body: { user_id: userId } }),
+
 	searchUsers: (c, query) =>
 		c.request("/search_users", {
 			body: { query, cofollows_only: false, followers_only: false, following_only: false }

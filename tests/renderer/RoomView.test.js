@@ -127,3 +127,46 @@ describe("RoomView chat panel", () => {
 		expect(wrapper.find(".room__compose").exists()).toBe(false);
 	});
 });
+
+describe("opening a profile from a room", () => {
+	it("shows a sheet over the room instead of leaving it", async () => {
+		bridge.api.getProfile = vi.fn().mockResolvedValue({
+			ok: true,
+			data: { user_profile: { user_id: 7, name: "Me", username: "me" } }
+		});
+		bridge.api.me = vi.fn().mockResolvedValue({ ok: true, data: { following_ids: [], blocked_ids: [] } });
+
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		expect(wrapper.find(".sheet").exists()).toBe(false);
+
+		await wrapper.find(".tile").trigger("click");
+		await settle(wrapper);
+
+		expect(wrapper.find(".sheet").exists()).toBe(true);
+		// The room is still mounted and still joined.
+		expect(wrapper.find(".room__main").exists()).toBe(true);
+		expect(bridge.api.leaveChannel).not.toHaveBeenCalled();
+	});
+
+	it("closes the sheet without touching the room", async () => {
+		bridge.api.getProfile = vi.fn().mockResolvedValue({
+			ok: true,
+			data: { user_profile: { user_id: 7, name: "Me", username: "me" } }
+		});
+		bridge.api.me = vi.fn().mockResolvedValue({ ok: true, data: { following_ids: [], blocked_ids: [] } });
+
+		const wrapper = mountRoom();
+		await settle(wrapper);
+		await wrapper.find(".tile").trigger("click");
+		await settle(wrapper);
+
+		await wrapper.find(".sheet").trigger("click");
+		await wrapper.vm.$nextTick();
+
+		expect(wrapper.find(".sheet").exists()).toBe(false);
+		expect(wrapper.find(".room__main").exists()).toBe(true);
+		expect(bridge.api.leaveChannel).not.toHaveBeenCalled();
+	});
+});

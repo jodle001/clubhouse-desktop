@@ -26,7 +26,8 @@ export default [
 				TextEncoder: "readonly",
 				fetch: "readonly",
 				AbortSignal: "readonly",
-				HTMLInputElement: "readonly"
+				HTMLInputElement: "readonly",
+				KeyboardEvent: "readonly"
 			}
 		},
 		rules: {

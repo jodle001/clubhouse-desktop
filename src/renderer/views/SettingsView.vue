@@ -2,17 +2,48 @@
 import { ref, onMounted } from "vue";
 import { useSession, updateSettings } from "../composables/useSession.js";
 import { useTheme } from "../composables/useTheme.js";
+import { useApi } from "../composables/useApi.js";
 import { notify } from "../composables/useToast.js";
+import UserRow from "../components/UserRow.vue";
+import EmptyState from "../components/EmptyState.vue";
+import AppSpinner from "../components/AppSpinner.vue";
 
 const { state } = useSession();
 const { theme, setTheme, THEMES } = useTheme();
+const { run } = useApi();
 
 const audioEnabled = ref(false);
 const filterNonLatinRooms = ref(false);
 
+const blocked = ref([]);
+const loadingBlocked = ref(true);
+const unblocking = ref(0);
+
+async function loadBlocked() {
+	loadingBlocked.value = true;
+	const result = await run("getBlockedUsers");
+	blocked.value = result?.users || [];
+	loadingBlocked.value = false;
+}
+
+async function unblock(user) {
+	unblocking.value = user.user_id;
+	const result = await run("unblock", user.user_id);
+
+	if (result) {
+		// Drop it locally rather than refetching - the list is small and the
+		// server has already agreed.
+		blocked.value = blocked.value.filter(u => u.user_id !== user.user_id);
+		notify({ type: "success", message: `Unblocked ${user.name}.` });
+	}
+
+	unblocking.value = 0;
+}
+
 onMounted(() => {
 	audioEnabled.value = Boolean(state.settings.audioEnabled);
 	filterNonLatinRooms.value = Boolean(state.settings.filterNonLatinRooms);
+	loadBlocked();
 });
 
 async function toggleAudio() {
@@ -68,6 +99,25 @@ function toggleFilter() {
 			</label>
 		</section>
 
+		<section class="card stack">
+			<h2 class="section__title">Blocked accounts</h2>
+
+			<AppSpinner v-if="loadingBlocked" />
+			<EmptyState v-else-if="!blocked.length" message="You have not blocked anybody." />
+
+			<div v-else class="blocked">
+				<UserRow v-for="user in blocked" :key="user.user_id" :user="user">
+					<button
+						class="btn btn-secondary btn-sm"
+						:disabled="unblocking === user.user_id"
+						@click.prevent="unblock(user)"
+					>
+						Unblock
+					</button>
+				</UserRow>
+			</div>
+		</section>
+
 		<p class="muted about">
 			Clubhouse Desktop · unofficial client · originally by
 			<a href="https://callmearta.ir" target="_blank" rel="noreferrer">Arta Mo</a>
@@ -82,6 +132,11 @@ function toggleFilter() {
 	margin: 0 auto;
 	display: grid;
 	gap: 1rem;
+}
+
+.blocked {
+	display: grid;
+	gap: 0.25rem;
 }
 
 .page__title {

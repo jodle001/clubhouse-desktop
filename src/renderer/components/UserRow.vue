@@ -3,19 +3,25 @@ import AppAvatar from "./AppAvatar.vue";
 
 defineProps({
 	user: { type: Object, required: true },
-	subtitle: { type: String, default: "" }
+	subtitle: { type: String, default: "" },
+	/** A link out is wrong inside a sheet that is already over something. */
+	linkable: { type: Boolean, default: true }
 });
 </script>
 
 <template>
-	<RouterLink :to="{ name: 'user', params: { id: user.user_id } }" class="user-row">
+	<component
+		:is="linkable ? 'RouterLink' : 'div'"
+		:to="linkable ? { name: 'user', params: { id: user.user_id } } : undefined"
+		class="user-row"
+	>
 		<AppAvatar :user="user" :size="40" />
 		<span class="grow">
 			<span class="user-row__name truncate">{{ user.name }}</span>
 			<small class="muted truncate">{{ subtitle || (user.username ? `@${user.username}` : "") }}</small>
 		</span>
 		<slot />
-	</RouterLink>
+	</component>
 </template>
 
 <style scoped>

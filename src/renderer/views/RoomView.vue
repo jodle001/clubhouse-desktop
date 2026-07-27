@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { useRoom } from "../composables/useRoom.js";
 import { useSession, updateSettings } from "../composables/useSession.js";
 import SpeakerTile from "../components/SpeakerTile.vue";
+import ProfileSheet from "../components/ProfileSheet.vue";
 import AppSpinner from "../components/AppSpinner.vue";
 import EmptyState from "../components/EmptyState.vue";
 
@@ -30,6 +31,9 @@ async function exit() {
 	await room.leave();
 	router.push({ name: "home" });
 }
+
+// Whose profile is open over the room, if any.
+const viewing = ref(null);
 
 const draft = ref("");
 const sending = ref(false);
@@ -105,6 +109,7 @@ async function send() {
 							:key="user.user_id"
 							:user="user"
 							:speaking="room.speakingUids.value.has(user.user_id)"
+							@select="viewing = user.user_id"
 						/>
 					</div>
 				</section>
@@ -118,6 +123,7 @@ async function send() {
 							v-for="user in room.followedBySpeakers.value"
 							:key="user.user_id"
 							:user="user"
+							@select="viewing = user.user_id"
 						/>
 					</div>
 				</section>
@@ -125,14 +131,24 @@ async function send() {
 				<section v-if="room.houseMembers.value.length">
 					<h2 class="room__heading">House members ({{ room.houseMembers.value.length }})</h2>
 					<div class="room__tiles">
-						<SpeakerTile v-for="user in room.houseMembers.value" :key="user.user_id" :user="user" />
+						<SpeakerTile
+							v-for="user in room.houseMembers.value"
+							:key="user.user_id"
+							:user="user"
+							@select="viewing = user.user_id"
+						/>
 					</div>
 				</section>
 
 				<section v-if="room.others.value.length">
 					<h2 class="room__heading">Others in the room ({{ room.others.value.length }})</h2>
 					<div class="room__tiles">
-						<SpeakerTile v-for="user in room.others.value" :key="user.user_id" :user="user" />
+						<SpeakerTile
+							v-for="user in room.others.value"
+							:key="user.user_id"
+							:user="user"
+							@select="viewing = user.user_id"
+						/>
 					</div>
 				</section>
 
@@ -190,6 +206,8 @@ async function send() {
 		</template>
 
 		<EmptyState v-else-if="room.error.value" :message="room.error.value" />
+
+		<ProfileSheet v-if="viewing" :id="viewing" @close="viewing = null" />
 	</div>
 </template>
 
