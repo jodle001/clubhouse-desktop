@@ -7,8 +7,12 @@
  * than an error the app can interpret. Published documentation is all from the
  * same era, so the only reliable way to find what replaced them is to ask.
  *
- *   npm run probe                      # the built-in candidate list
- *   npm run probe -- get_feed_v3 ...   # try specific names as well
+ *   npm run probe                          # the built-in candidate list
+ *   npm run probe -- get_feed_v3 ...       # try specific names as well
+ *   npm run probe -- --shape get_feed_v3   # print its response structure
+ *
+ * --shape prints types and nesting rather than the response itself, so the
+ * output can be shared without handing over names, tokens or phone numbers.
  *
  * Uses the signed-in session and the app's own identity and headers, so a
  * result here means the same thing inside the app.
@@ -100,8 +104,77 @@ function describe(status, contentType, text) {
 	}
 }
 
+/** Values that identify a person, or authorise as one. */
+const SENSITIVE = /token|phone|email|secret|password|auth/i;
+
+/**
+ * Renders types and nesting instead of data, so the result can be pasted
+ * somewhere public. Arrays are described by their first element.
+ */
+function shapeOf(value, indent = "  ", depth = 0) {
+	if (value === null) {
+		return "null";
+	}
+
+	if (Array.isArray(value)) {
+		if (value.length === 0) {
+			return "array[0]";
+		}
+
+		// A feed mixes item kinds, so describing only the first element would
+		// hide the rest. Show one example of each distinct shape.
+		const variants = new Map();
+		for (const element of value) {
+			const key =
+				element && typeof element === "object" && !Array.isArray(element)
+					? typeof element.type === "string"
+						? `type=${element.type}`
+						: Object.keys(element).sort().join(",")
+					: typeof element;
+
+			if (!variants.has(key)) {
+				variants.set(key, element);
+			}
+		}
+
+		if (variants.size === 1) {
+			return `array[${value.length}] of ${shapeOf(value[0], indent + "  ", depth + 1)}`;
+		}
+
+		const described = [...variants.entries()].map(
+			([key, element]) => `${indent}  ${key}: ${shapeOf(element, indent + "    ", depth + 1)}`
+		);
+
+		return `array[${value.length}], ${variants.size} shapes:\n${described.join("\n")}`;
+	}
+
+	if (typeof value === "object") {
+		if (depth >= 6) {
+			return "{ ... }";
+		}
+
+		const lines = Object.entries(value).map(([key, child]) => {
+			const rendered = SENSITIVE.test(key) ? `${typeof child} <hidden>` : shapeOf(child, indent + "  ", depth + 1);
+			return `${indent}${key}: ${rendered}`;
+		});
+
+		return `{\n${lines.join("\n")}\n${indent.slice(2)}}`;
+	}
+
+	if (typeof value === "string") {
+		const flat = value.replace(/\s+/g, " ");
+		return `string ${JSON.stringify(flat.length > 40 ? `${flat.slice(0, 40)}...` : flat)}`;
+	}
+
+	return `${typeof value} ${value}`;
+}
+
 const session = loadSession();
-const extra = process.argv.slice(2).map(name => ({
+const args = process.argv.slice(2);
+const wantsShape = args.includes("--shape");
+const names = args.filter(arg => !arg.startsWith("--"));
+
+const extra = names.map(name => ({
 	path: name.startsWith("/") ? name : `/${name}`,
 	method: "POST",
 	body: {}
@@ -111,8 +184,15 @@ console.log(`\nIdentity: ${APP_IDENTITY.userAgent} ${APP_IDENTITY.appVersion} ($
 console.log(`Signed in as user ${session.userId ?? "(unknown)"}\n`);
 
 const alive = [];
+// --shape only makes sense for endpoints actually asked for.
+const targets = wantsShape ? extra : [...CANDIDATES, ...extra];
 
-for (const candidate of [...CANDIDATES, ...extra]) {
+if (wantsShape && extra.length === 0) {
+	console.error("--shape needs an endpoint, e.g. npm run probe -- --shape get_feed_v3\n");
+	process.exit(1);
+}
+
+for (const candidate of targets) {
 	let url = API_ROOT + candidate.path;
 
 	if (candidate.query) {
@@ -135,6 +215,19 @@ for (const candidate of [...CANDIDATES, ...extra]) {
 	try {
 		const response = await nodeTransport(url, options);
 		const text = await response.text();
+
+		if (wantsShape) {
+			console.log(`${candidate.method} ${candidate.path} -> ${response.status}`);
+
+			try {
+				console.log(shapeOf(JSON.parse(text)), "\n");
+			} catch {
+				console.log(`  (not JSON) ${text.slice(0, 200)}\n`);
+			}
+
+			continue;
+		}
+
 		const verdict = describe(response.status, response.headers?.["content-type"], text);
 
 		console.log(`${label} ${String(response.status).padEnd(4)} ${verdict}`);
@@ -147,4 +240,6 @@ for (const candidate of [...CANDIDATES, ...extra]) {
 	}
 }
 
-console.log(`\nStill served: ${alive.length ? alive.join(", ") : "nothing"}\n`);
+if (!wantsShape) {
+	console.log(`\nStill served: ${alive.length ? alive.join(", ") : "nothing"}\n`);
+}
