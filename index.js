@@ -13,7 +13,11 @@ const { is } = require("electron-util");
 // Only watch sources while developing - in a packaged build the sources live
 // inside app.asar and electron-reload just logs "Electron could not be found".
 if (is.development) {
-	require("electron-reload")(__dirname);
+	// Without an explicit path it cannot find the binary and prints
+	// "Electron could not be found. No hard resets for you!" on every start.
+	require("electron-reload")(__dirname, {
+		electron: path.join(__dirname, "node_modules", ".bin", "electron")
+	});
 }
 
 const unhandled = require("electron-unhandled");
@@ -29,7 +33,9 @@ if (os.platform() == "darwin") {
 }
 
 unhandled();
-debug();
+// Don't throw DevTools open on every launch just because this is a source
+// checkout - it is still available on F12 / Ctrl+Shift+I.
+debug({ showDevTools: false });
 contextMenu();
 
 // Note: Must match `build.appId` in package.json
