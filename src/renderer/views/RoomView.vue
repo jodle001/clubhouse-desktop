@@ -69,6 +69,14 @@ watch(
 	}
 );
 
+const accepting = ref(false);
+
+async function accept() {
+	accepting.value = true;
+	await room.acceptInvite();
+	accepting.value = false;
+}
+
 async function send() {
 	sending.value = true;
 
@@ -88,6 +96,22 @@ async function send() {
 
 		<template v-else-if="room.channel.info">
 			<div class="room__main">
+				<!--
+					A moderator has offered the stage. This used to arrive over
+					PubNub and be dropped, so being brought up was
+					indistinguishable from being ignored.
+				-->
+				<div v-if="room.invite.value" class="room__invite">
+					<span class="grow">
+						<strong>{{ room.invite.value.fromName || "A moderator" }}</strong>
+						invited you to speak.
+					</span>
+					<button class="btn" :disabled="accepting" @click="accept">Join as speaker</button>
+					<button class="btn btn-secondary" :disabled="accepting" @click="room.declineInvite()">
+						Not now
+					</button>
+				</div>
+
 				<header class="room__header">
 					<div class="grow">
 						<h1 class="room__topic">{{ room.channel.info.topic || "Untitled room" }}</h1>
@@ -189,6 +213,7 @@ async function send() {
 						<li v-for="(message, i) in room.chat.messages" :key="message.message_id ?? i">
 							<strong>{{ message.user_profile?.name || message.name || "Someone" }}</strong>
 							<span>{{ message.message ?? message.text }}</span>
+							<span v-if="message.like_count" class="room__likes">♥ {{ message.like_count }}</span>
 						</li>
 					</ul>
 
@@ -240,6 +265,19 @@ async function send() {
 	overflow-y: auto;
 	padding-right: 0.5rem;
 	padding-bottom: 6rem;
+}
+
+.room__invite {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	flex-wrap: wrap;
+	margin-bottom: 1rem;
+	padding: 0.75rem 1rem;
+	border-radius: var(--radius-sm);
+	background: var(--surface);
+	border-left: 3px solid var(--green, #3ba55d);
+	font-size: 0.9rem;
 }
 
 .room__header {
@@ -359,6 +397,13 @@ async function send() {
 	background: var(--surface-2);
 	border-radius: var(--radius-sm);
 	font-size: 0.85rem;
+}
+
+.room__likes {
+	margin-left: 0.35rem;
+	font-size: 0.72rem;
+	color: var(--text-muted);
+	white-space: nowrap;
 }
 
 .room__messages strong {

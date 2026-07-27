@@ -15,6 +15,8 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 	const handRaised = ref(false);
 	const joining = ref(false);
 	const everCount = ref(0);
+	/** A moderator's invitation to speak, until answered. */
+	const invite = ref(null);
 	const error = ref("");
 
 	const chat = reactive({ messages: [], enabled: false, canPost: false, error: "" });
@@ -38,6 +40,7 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			message_id: raw.message_id,
 			message: raw.message ?? raw.text,
 			time_created: raw.time_created,
+			like_count: raw.like_count ?? 0,
 			user_profile: raw.user_profile || {
 				user_id: raw.from_user_id,
 				name: raw.from_name,
@@ -235,6 +238,22 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			// dropping - it carries the author inline, so no lookup is needed.
 			events.on("new_channel_message", event => addMessage(chatEntry(event)));
 
+			events.on("channel_message_like_count_update", event => {
+				const message = chat.messages.find(m => m.message_id === event.message_id);
+				if (message) {
+					message.like_count = event.like_count;
+				}
+			});
+
+			/**
+			 * A moderator inviting you onto the stage. This was being dropped
+			 * silently, so raising a hand and being brought up looked exactly
+			 * like raising a hand and being ignored.
+			 */
+			events.on("invite_speaker", event => {
+				invite.value = { fromName: event.from_name, fromUserId: event.from_user_id };
+			});
+
 			// How many people have passed through since the room opened, which
 			// is a different and more interesting number than who is here now.
 			events.on("cumulative_count_update", event => {
@@ -272,6 +291,7 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		pingTimer = null;
 
 		everCount.value = 0;
+		invite.value = null;
 		chat.messages = [];
 		chat.enabled = false;
 		chat.canPost = false;
@@ -301,6 +321,35 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		muted.value = audio.isMuted();
 	}
 
+	/**
+	 * Take the stage. The invite names who sent it, but the call is about us -
+	 * it is our own user id that moves from audience to speaker.
+	 */
+	async function acceptInvite() {
+		const info = channel.info;
+		if (!info || !invite.value) {
+			return false;
+		}
+
+		const meId = info.user_profile_id;
+
+		try {
+			await call("acceptSpeakerInvite", info.channel, meId);
+			patchUser(meId, { is_speaker: true });
+			handRaised.value = false;
+			invite.value = null;
+			return true;
+		} catch (err) {
+			error.value = err.message;
+			return false;
+		}
+	}
+
+	/** Nothing to tell the server: the invite simply goes unanswered. */
+	function declineInvite() {
+		invite.value = null;
+	}
+
 	async function toggleHand() {
 		const name = channel.info?.channel;
 		if (!name) {
@@ -325,12 +374,15 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		muted,
 		handRaised,
 		everCount,
+		invite,
 		joining,
 		error,
 		speakingUids,
 		join,
 		leave,
 		sendChat,
+		acceptInvite,
+		declineInvite,
 		toggleMute,
 		toggleHand,
 		// exposed for tests

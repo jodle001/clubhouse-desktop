@@ -354,3 +354,45 @@ describe("unrecognised actions", () => {
 		expect(events.hasHandlers("brand_new_thing")).toBe(true);
 	});
 });
+
+describe("chat message likes", () => {
+	it("shows the like count history reports", async () => {
+		bridge.api.getChannelMessages = vi.fn().mockResolvedValue({
+			ok: true,
+			data: { messages: [{ message_id: "m1", message: "hi", like_count: 3 }] }
+		});
+
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+
+		expect(room.chat.messages[0].like_count).toBe(3);
+	});
+
+	it("updates a count when PubNub says it changed", async () => {
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+		events.deliver(messageEvent({ message_id: "m1", message: "hi" }));
+
+		events.deliver({
+			action: "channel_message_like_count_update",
+			channel: "PAKBKoJ7",
+			message_id: "m1",
+			like_count: 7
+		});
+
+		expect(room.chat.messages[0].like_count).toBe(7);
+	});
+
+	it("ignores a count for a message it has never seen", async () => {
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+
+		expect(() =>
+			events.deliver({
+				action: "channel_message_like_count_update",
+				message_id: "unknown",
+				like_count: 2
+			})
+		).not.toThrow();
+	});
+});

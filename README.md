@@ -157,11 +157,18 @@ object carrying the fields `/get_channels` used to return. Other item kinds turn
 up in that list, so anything without a `channel` is skipped.
 
 Room chat arrives over PubNub as a `new_channel_message` action, carrying the
-author inline, and history comes from `/get_channel_messages?channel=`. Note the
-near-miss: `/get_chat_messages` also exists but rejects every shape tried with an
-empty `error_message`, while `/get_channel_messages` names what it wants - and
-pairs with `/send_channel_message`. An endpoint that says what is missing is
-worth more than one that only says no.
+author inline, and history comes from `/get_channel_messages?channel=` (newest
+first, so it is sorted before display). Note the near-miss: `/get_chat_messages`
+also exists but rejects every shape tried with an empty `error_message`, while
+`/get_channel_messages` names what it wants - and pairs with
+`/send_channel_message`. An endpoint that says what is missing is worth more
+than one that only says no.
+
+PubNub carries more than chat. `invite_speaker` is how a moderator offers you
+the stage, and `channel_message_like_count_update` is somebody liking a message.
+Both were being dropped before anything listened for them, which is why the
+adapter logs every action nothing handles - that log is how each one here was
+found.
 
 The screens built on retired endpoints have been removed rather than left to
 report a 404: notifications, the followers and following lists, and events. The

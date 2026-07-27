@@ -18,11 +18,20 @@ const person = (id, flags = {}) => ({
 
 let bridge;
 
+let events;
+
 function makeRoom() {
-	return useRoom({
+	const room = useRoom({
 		makeAudio: async () => new FakeAudioEngine(),
-		makeEvents: async () => new FakeRoomEvents()
+		makeEvents: async () => {
+			events = new FakeRoomEvents();
+			return events;
+		}
 	});
+
+	// Handy in tests: push events in as PubNub would.
+	Object.defineProperty(room, "_events", { get: () => events });
+	return room;
 }
 
 function joinWith(users) {
@@ -108,5 +117,112 @@ describe("the audience, grouped the way the phone app groups it", () => {
 
 		expect(room.speakers.value.map(u => u.user_id)).toEqual([1, 2]);
 		expect(room.others.value).toHaveLength(0);
+	});
+});
+
+describe("being invited to speak", () => {
+	beforeEach(() => {
+		bridge.api.acceptSpeakerInvite = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+		bridge.api.raiseHand = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+	});
+
+	/** The event exactly as PubNub delivered it. */
+	const inviteEvent = {
+		action: "invite_speaker",
+		channel: "C1",
+		from_name: "Andrew R.",
+		from_user_id: 2112937972
+	};
+
+	function joinAsListener() {
+		bridge.api.joinChannel = vi.fn().mockResolvedValue({
+			ok: true,
+			data: {
+				success: true,
+				channel: "C1",
+				channel_id: 1,
+				user_profile_id: 9,
+				users: [person(9), person(2112937972, { is_speaker: true, is_moderator: true })],
+				user_capabilities: {}
+			}
+		});
+	}
+
+	it("surfaces the invitation instead of dropping it", async () => {
+		// It used to arrive and be discarded, so being brought up on stage was
+		// indistinguishable from being ignored.
+		joinAsListener();
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		expect(room.invite.value).toBeNull();
+
+		room._events.deliver(inviteEvent);
+
+		expect(room.invite.value).toEqual({ fromName: "Andrew R.", fromUserId: 2112937972 });
+	});
+
+	it("accepting moves you onto the stage", async () => {
+		joinAsListener();
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+		room._events.deliver(inviteEvent);
+
+		await expect(room.acceptInvite()).resolves.toBe(true);
+
+		expect(bridge.api.acceptSpeakerInvite).toHaveBeenCalledWith("C1", 9);
+		expect(room.speakers.value.map(u => u.user_id)).toContain(9);
+		expect(room.invite.value).toBeNull();
+	});
+
+	it("lowers a raised hand once you are up", async () => {
+		joinAsListener();
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+		await room.toggleHand();
+		expect(room.handRaised.value).toBe(true);
+
+		room._events.deliver(inviteEvent);
+		await room.acceptInvite();
+
+		expect(room.handRaised.value).toBe(false);
+	});
+
+	it("keeps the invitation up if accepting fails", async () => {
+		joinAsListener();
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+		room._events.deliver(inviteEvent);
+
+		bridge.api.acceptSpeakerInvite = vi
+			.fn()
+			.mockResolvedValue({ ok: false, error: { message: "Nope", status: 400 } });
+
+		await expect(room.acceptInvite()).resolves.toBe(false);
+		expect(room.invite.value).not.toBeNull();
+		expect(room.speakers.value.map(u => u.user_id)).not.toContain(9);
+	});
+
+	it("declining just dismisses it", async () => {
+		joinAsListener();
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+		room._events.deliver(inviteEvent);
+
+		room.declineInvite();
+
+		expect(room.invite.value).toBeNull();
+		expect(bridge.api.acceptSpeakerInvite).not.toHaveBeenCalled();
+	});
+
+	it("forgets an unanswered invitation on leaving", async () => {
+		joinAsListener();
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+		room._events.deliver(inviteEvent);
+
+		await room.leave();
+
+		expect(room.invite.value).toBeNull();
 	});
 });

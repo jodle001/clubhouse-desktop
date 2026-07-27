@@ -20,7 +20,8 @@ const ACTIONS = [
 	"raise_hands",
 	"unraise_hands",
 	"new_channel_message",
-	"cumulative_count_update"
+	"cumulative_count_update",
+	"channel_message_like_count_update"
 ];
 
 class Emitter {
