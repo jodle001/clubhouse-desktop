@@ -19,9 +19,19 @@ npm run dev        # hot-reloading development build
 npm start          # build, then run
 ```
 
-`npm install` downloads the Electron binary as a post-install step. If that is
-blocked by a proxy you will see *"Electron failed to install correctly"* — run
-`(cd node_modules/electron && node install.js)` to fetch it separately.
+`npm install` downloads Electron's ~220 MB binary as a post-install step, and
+that download is easy to block — a proxy, a firewall, or `ignore-scripts` will
+all leave you with an install npm reports as successful but that fails later
+with a bare *"Error: Electron uninstall"*.
+
+`npm run dev` and `npm start` check for the binary first and finish the download
+if it is missing, so this should self-repair. If it genuinely cannot reach
+GitHub, try a mirror:
+
+```sh
+export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+(cd node_modules/electron && node install.js)
+```
 
 Fedora needs nothing beyond `nodejs`/`npm`; everything else ships inside
 Electron. `sudo dnf install rpm-build` is only required to build an `.rpm`.
