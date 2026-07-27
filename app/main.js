@@ -6,6 +6,10 @@ const store = require("store");
 const ClubHouseApi = require("clubhouse-api");
 const ua = require("universal-analytics");
 import AppProfile from "./profile.mjs";
+import { installRequestLogging } from "./debug.mjs";
+
+// Before any view can make a request. No-op without --verbose.
+installRequestLogging();
 
 import Login from "./views/login.js";
 import Home from "./views/home.js";

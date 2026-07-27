@@ -39,6 +39,17 @@ sudo dnf install nodejs npm            # to run from source
 sudo dnf install rpm-build             # only if you want to build the .rpm
 ```
 
+## Verbose logging
+
+```sh
+npm start -- --verbose
+```
+
+Echoes the renderer's console to the terminal and logs every API call - method,
+URL, request body, response status and response body. Off unless the flag is
+passed. `auth_token`, `access_token` and `refresh_token` are replaced with
+`<redacted>` so a pasted log cannot leak a session.
+
 ## A note on the Chromium sandbox
 
 This Electron bundles Chromium 85, whose seccomp policy predates the `clone3()`

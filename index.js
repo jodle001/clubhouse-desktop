@@ -42,6 +42,10 @@ contextMenu();
 app.setAppUserModelId("com.company.ClubHouse");
 app.commandLine.appendSwitch("ignore-certificate-errors");
 
+// npm start -- --verbose : echo the renderer's console to this terminal and log
+// every API request. Off by default.
+const VERBOSE = process.argv.includes("--verbose");
+
 if (os.platform() == "linux") {
 	// This Electron bundles Chromium 85, whose seccomp policy predates the
 	// clone3() syscall. glibc 2.34+ uses clone3() in pthread_create, so on a
@@ -73,10 +77,26 @@ const createMainWindow = async () => {
 		webPreferences: {
 			nodeIntegration: true,
 			nodeIntegrationInSubFrames: true,
-			nodeIntegrationInWorker: true
+			nodeIntegrationInWorker: true,
+			// Reaches the renderer as process.argv, which is how app/debug.mjs
+			// knows whether to log requests.
+			additionalArguments: VERBOSE ? ["--verbose"] : []
 			// devTools: false
 		}
 	});
+
+	if (VERBOSE) {
+		const levels = ["debug", "info", "warn", "error"];
+		win.webContents.on("console-message", (event, level, message, line, source) => {
+			console.log(`[renderer:${levels[level] || level}] ${message}  (${source}:${line})`);
+		});
+		win.webContents.on("render-process-gone", (event, details) => {
+			console.log(`[renderer gone] ${JSON.stringify(details)}`);
+		});
+		win.webContents.on("did-fail-load", (event, code, description, url) => {
+			console.log(`[load failed] ${code} ${description} ${url}`);
+		});
+	}
 
 	app.on("ready", () => {
 		// Register a shortcut listener for Ctrl + Shift + I

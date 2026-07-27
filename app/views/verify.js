@@ -34,7 +34,8 @@ const Verify = {
         return {
             code: '',
             called: false,
-            loading:false
+            loading:false,
+            error:''
         }
     },
     methods:{
@@ -59,36 +60,51 @@ const Verify = {
             }
         },
         verify: async function(){
-            if(this.code.length === 4){
-                this.loading = true;
-                const result = await ClubHouseApi.api.completeMobileAuth(profiles,this.phone,this.code);
-                console.log(result);
-                if(result.success && result.is_verified){
-                    store.set('userData',result);
-                    console.log('stored user data');
-                }else{
-                    this.loading = false;
-                    if(result.number_of_attempts_remaining){
-                        const notif = new Notification('Code Not Valid',{
-                            body:'Code you entered is not valid'
-                        });
-                        return notif;
-                    }
-                }
-    
+            // This used to require exactly 4 digits. Clubhouse sends 6, so the
+            // whole body was skipped and the button did nothing at all - no
+            // request, no error, no log. Accept any plausible length instead.
+            const code = String(this.code || '').replace(/\D/g, '');
+
+            if(code.length < 4 || code.length > 8){
+                this.error = 'Enter the code from the text message.';
+                return;
+            }
+
+            this.error = '';
+            this.loading = true;
+
+            let result;
+            try{
+                result = await ClubHouseApi.api.completeMobileAuth(profiles,this.phone,code);
+            }catch(err){
+                this.loading = false;
+                this.error = `Could not reach Clubhouse: ${err.message}`;
+                console.error(err);
+                return;
+            }
+            console.log('complete_phone_number_auth', result);
+
+            if(result.success){
+                store.set('userData',result);
+
                 if(result.is_waitlisted){
                     return this.$router.replace({name:'waitlist'});
                 }
-                if(!result.is_waitlisted && (!result.user_profile.username || !result.user_profile.username.length)){
+
+                const profile = result.user_profile || {};
+                if(!profile.username || !profile.username.length){
                     return this.$router.replace({name:'editProfile'});
-                }            
-                // if(result.is_onboarding){
-                //     return this.$router.replace({name:'editProfile'});
-                // }
-                if(result.success){
-                    return this.$router.replace({name:'home'});
                 }
+
+                return this.$router.replace({name:'home'});
             }
+
+            // Anything else: say so, rather than leaving the button inert.
+            this.loading = false;
+            this.error = result.error_message ||
+                (result.number_of_attempts_remaining != null
+                    ? `That code was not accepted. ${result.number_of_attempts_remaining} attempt(s) left.`
+                    : 'Verification failed.');
         }
     },
     template: `
@@ -101,8 +117,9 @@ const Verify = {
                     <small class="text-muted mb-5 d-block text-center">Unofficial Desktop Client</small>
                     <div class="input-group">
                         <label>Enter the code you received:</label>
-                        <input type="tel" class="form-control text-center" v-model="code" placeholder="****" />
+                        <input type="tel" class="form-control text-center" v-model="code" placeholder="123456" autofocus @keyup.enter="verify" />
                     </div>
+                    <div v-if="error" class="login-error mt-3">{{ error }}</div>
                     <div class="d-flex align-items-center justify-content-center mt-4">
                         <button class="btn-primary mr-4" @click="verify">Verify Code</button>
                         <button v-if="!called" class="btn-primary" @click="callAuth">Call Me</button>
