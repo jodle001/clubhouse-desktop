@@ -71,6 +71,26 @@ const CANDIDATES = [
 	{ path: "/get_feed", method: "POST", body: {} },
 	{ path: "/get_feed_v3", method: "GET", query: {} },
 
+	// --- discovery, as opposed to the feed --------------------------------
+	// get_feed_v3 is personalised: rooms from people you follow and houses you
+	// are in. /me answers should_show_explore_public_hallway: true and carries
+	// ENABLE_DISCOVERY_TAB_ANDROID, so a public surface exists under some name.
+	{ path: "/get_explore", method: "POST", body: {} },
+	{ path: "/get_explore_v2", method: "POST", body: {} },
+	{ path: "/explore", method: "POST", body: {} },
+	{ path: "/get_discovery", method: "POST", body: {} },
+	{ path: "/get_discover", method: "POST", body: {} },
+	{ path: "/get_public_hallway", method: "POST", body: {} },
+	{ path: "/get_hallway", method: "POST", body: {} },
+	{ path: "/get_public_channels", method: "POST", body: {} },
+	{ path: "/get_suggested_channels", method: "POST", body: {} },
+	{ path: "/get_trending_channels", method: "POST", body: {} },
+	{ path: "/get_top_channels", method: "POST", body: {} },
+	// /search_users is alive, so the room equivalent is worth trying too.
+	{ path: "/search_channels", method: "POST", body: { query: "a" } },
+	{ path: "/search_clubs", method: "POST", body: { query: "a" } },
+	{ path: "/search_all", method: "POST", body: { query: "a" } },
+
 	// Other shapes worth ruling in or out.
 	{ path: "/get_online_channels", method: "POST", body: {} },
 	{ path: "/get_all_channels", method: "POST", body: {} },
