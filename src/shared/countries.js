@@ -2,10 +2,12 @@
  * Country dialling codes for the sign-in form, so a number can be entered the
  * way people actually write it locally instead of in E.164 by hand.
  *
- * `trunk` marks countries that use a national trunk prefix (usually 0) which is
- * dropped when the number is written internationally: 07911 123456 in the UK is
- * +44 7911 123456. Italy is the well-known exception - its landline numbers keep
- * the leading 0 - so it is deliberately not marked.
+ * `trunk` marks countries that use a national trunk prefix which is dropped
+ * when the number is written internationally: 07911 123456 in the UK is
+ * +44 7911 123456. `true` means the usual "0"; a string names a different
+ * prefix - Russia and Kazakhstan write 8 916..., Hungary writes 06 30... .
+ * Italy is the well-known exception - its landline numbers keep the leading 0
+ * - so it is deliberately not marked.
  */
 
 const COUNTRIES = [
@@ -51,7 +53,7 @@ const COUNTRIES = [
 	{ name: "Guatemala", iso: "GT", dial: "502" },
 	{ name: "Honduras", iso: "HN", dial: "504" },
 	{ name: "Hong Kong", iso: "HK", dial: "852" },
-	{ name: "Hungary", iso: "HU", dial: "36", trunk: true },
+	{ name: "Hungary", iso: "HU", dial: "36", trunk: "06" },
 	{ name: "Iceland", iso: "IS", dial: "354" },
 	{ name: "India", iso: "IN", dial: "91", trunk: true },
 	{ name: "Indonesia", iso: "ID", dial: "62", trunk: true },
@@ -65,7 +67,7 @@ const COUNTRIES = [
 	{ name: "Jamaica", iso: "JM", dial: "1", nsn: 10 },
 	{ name: "Japan", iso: "JP", dial: "81", trunk: true },
 	{ name: "Jordan", iso: "JO", dial: "962", trunk: true },
-	{ name: "Kazakhstan", iso: "KZ", dial: "7", trunk: true },
+	{ name: "Kazakhstan", iso: "KZ", dial: "7", trunk: "8" },
 	{ name: "Kenya", iso: "KE", dial: "254", trunk: true },
 	{ name: "Kuwait", iso: "KW", dial: "965" },
 	{ name: "Latvia", iso: "LV", dial: "371" },
@@ -99,7 +101,7 @@ const COUNTRIES = [
 	{ name: "Puerto Rico", iso: "PR", dial: "1", nsn: 10 },
 	{ name: "Qatar", iso: "QA", dial: "974" },
 	{ name: "Romania", iso: "RO", dial: "40", trunk: true },
-	{ name: "Russia", iso: "RU", dial: "7", trunk: true },
+	{ name: "Russia", iso: "RU", dial: "7", trunk: "8" },
 	{ name: "Saudi Arabia", iso: "SA", dial: "966", trunk: true },
 	{ name: "Senegal", iso: "SN", dial: "221" },
 	{ name: "Serbia", iso: "RS", dial: "381", trunk: true },

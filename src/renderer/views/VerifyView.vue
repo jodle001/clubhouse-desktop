@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useApi } from "../composables/useApi.js";
 import { useSession } from "../composables/useSession.js";
+import { verificationCode } from "@shared/phone.js";
 import AppSpinner from "../components/AppSpinner.vue";
 
 const route = useRoute();
@@ -23,10 +24,11 @@ onMounted(() => {
 
 async function verify() {
 	// Clubhouse sends 6 digits. The old client hard-coded a check for exactly
-	// 4 and silently did nothing for anything else.
-	const digits = String(code.value || "").replace(/\D/g, "");
+	// 4 and silently did nothing for anything else. The guard lives in
+	// shared/phone.js so the tests exercise this exact rule.
+	const digits = verificationCode(code.value);
 
-	if (digits.length < 4 || digits.length > 8) {
+	if (!digits) {
 		error.value = "Enter the code from the text message.";
 		return;
 	}

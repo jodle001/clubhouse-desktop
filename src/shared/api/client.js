@@ -84,13 +84,16 @@ export class ClubhouseClient {
 		this.onRequest?.({ phase: "request", method, url, body, headers });
 
 		let response;
+		let text;
 		try {
 			response = await this.transport(url, options);
+			// Inside the try: with a streaming transport the body can fail
+			// after the headers arrived, and that is a transport failure too -
+			// not a bare TypeError outside the error taxonomy.
+			text = await response.text();
 		} catch (cause) {
 			throw new ApiError(`Could not reach Clubhouse: ${cause.message}`, { endpoint });
 		}
-
-		const text = await response.text();
 		let data;
 		try {
 			data = text ? JSON.parse(text) : {};

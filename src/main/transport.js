@@ -43,12 +43,15 @@ function decoder(encoding) {
 	}
 }
 
+/** Long enough for a slow mobile API, short enough that the UI is not stuck. */
+const TIMEOUT_MS = 30000;
+
 /**
  * @param {string} url
- * @param {{method?: string, headers?: object, body?: string}} [options]
+ * @param {{method?: string, headers?: object, body?: string, timeout?: number}} [options]
  * @returns {Promise<{ok: boolean, status: number, text: () => Promise<string>}>}
  */
-export function nodeTransport(url, { method = "GET", headers = {}, body } = {}) {
+export function nodeTransport(url, { method = "GET", headers = {}, body, timeout = TIMEOUT_MS } = {}) {
 	const target = new URL(url);
 	const send = target.protocol === "http:" ? httpRequest : httpsRequest;
 	const payload = body === undefined ? null : Buffer.from(body);
@@ -78,8 +81,22 @@ export function nodeTransport(url, { method = "GET", headers = {}, body } = {}) 
 				source.on("data", chunk => (text += chunk));
 				source.on("end", () => resolve(toResponse(res, text)));
 				source.on("error", reject);
+
+				// pipe() does not forward errors: a socket that dies mid-body
+				// on a compressed response would error on `res`, unpipe, and
+				// leave the zlib stream waiting forever for data that is never
+				// coming - a promise that neither resolves nor rejects.
+				if (stream) {
+					res.on("error", reject);
+				}
 			}
 		);
+
+		// A server that accepts the connection and never answers would
+		// otherwise hang the request - and the caller's spinner - forever.
+		req.setTimeout(timeout, () => {
+			req.destroy(new Error(`No response within ${Math.round(timeout / 1000)}s`));
+		});
 
 		req.on("error", reject);
 		req.end(payload ?? undefined);

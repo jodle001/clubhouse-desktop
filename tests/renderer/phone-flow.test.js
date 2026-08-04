@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { composePhone, phoneError } from "@shared/phone.js";
+import { composePhone, phoneError, verificationCode } from "@shared/phone.js";
 import { findCountry } from "@shared/countries.js";
 
 /**
@@ -19,22 +19,25 @@ describe("sign-in guards (regression)", () => {
 		expect(phoneError(phone, findCountry("US"))).toBeTruthy();
 	});
 
-	const codeAccepted = code => {
-		const digits = String(code || "").replace(/\D/g, "");
-		return digits.length >= 4 && digits.length <= 8;
-	};
+	// The real guard, not a re-implementation of it: an earlier version of
+	// this file duplicated the rule locally, so it kept passing while the
+	// form could regress freely.
 
 	it("accepts the 6 digit code Clubhouse actually sends", () => {
-		expect(codeAccepted("123456")).toBe(true);
+		expect(verificationCode("123456")).toBe("123456");
 	});
 
 	it("still accepts 4 digits, which older accounts received", () => {
-		expect(codeAccepted("1234")).toBe(true);
+		expect(verificationCode("1234")).toBe("1234");
+	});
+
+	it("strips the formatting people paste", () => {
+		expect(verificationCode(" 123 456 ")).toBe("123456");
 	});
 
 	it("rejects empty and obviously wrong lengths", () => {
-		expect(codeAccepted("")).toBe(false);
-		expect(codeAccepted("12")).toBe(false);
-		expect(codeAccepted("1234567890123")).toBe(false);
+		expect(verificationCode("")).toBe("");
+		expect(verificationCode("12")).toBe("");
+		expect(verificationCode("1234567890123")).toBe("");
 	});
 });

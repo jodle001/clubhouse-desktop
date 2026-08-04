@@ -379,6 +379,7 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 
 		everCount.value = 0;
 		invite.value = null;
+		audioError.value = "";
 		chat.messages = [];
 		chat.enabled = false;
 		chat.canPost = false;
@@ -386,8 +387,11 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 
 		const name = channel.info?.channel;
 
-		await events?.unsubscribe();
-		await audio?.destroy();
+		// Each teardown independently: a PubNub unsubscribe that throws must
+		// not leave the microphone live - leaving is the one flow that has to
+		// finish, because logout runs right behind it.
+		await events?.unsubscribe().catch(() => {});
+		await audio?.destroy().catch(() => {});
 		events = null;
 		audio = null;
 

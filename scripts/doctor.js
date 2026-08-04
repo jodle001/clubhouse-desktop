@@ -10,6 +10,7 @@
 
 import { createRequire } from "node:module";
 import { API_ROOT, APP_IDENTITY, buildHeaders, newDeviceId } from "../src/shared/profile.js";
+import { nodeTransport } from "../src/main/transport.js";
 
 const require = createRequire(import.meta.url);
 const apiRoot = process.env.CLUBHOUSE_API_ROOT || API_ROOT;
@@ -40,9 +41,13 @@ const started = Date.now();
 let response;
 
 try {
-	response = await fetch(`${apiRoot}/check_for_update?is_testflight=0`, {
+	// The app's own transport, not global fetch: undici adds sec-fetch-*
+	// headers no native app sends, which is the exact fingerprint difference
+	// that once made requests "succeed" while Clubhouse silently dropped them.
+	// A doctor probing with different headers than the patient proves nothing.
+	response = await nodeTransport(`${apiRoot}/check_for_update?is_testflight=0`, {
 		headers: buildHeaders({ deviceId: newDeviceId() }),
-		signal: AbortSignal.timeout(15000)
+		timeout: 15000
 	});
 } catch (error) {
 	console.log(`FAIL       ${error.message}`);

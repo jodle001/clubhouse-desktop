@@ -117,9 +117,9 @@ by number. Leave twenty minutes between rounds of testing.
 ## Verbose logging
 
 Off by default. Turned on, it echoes the renderer's console to your terminal
-and logs every API call — method, endpoint, and result. Auth tokens are
-replaced with `<redacted>`, but your phone number will appear, so take care
-with screenshots.
+and logs every API call — method, endpoint, and result. Auth tokens, your
+phone number and verification codes are replaced with `<redacted>`, however
+deeply a response nests them, so the output is safe to paste into an issue.
 
 ```sh
 npm start -- --verbose        # build and run

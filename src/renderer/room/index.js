@@ -89,6 +89,26 @@ export class FakeRoomEvents extends NullRoomEvents {
 	}
 }
 
+/**
+ * The PubNub channel names a room rides on. A pure function, because getting
+ * one of these strings wrong kills every live update silently - which makes
+ * it exactly the thing to pin with a test, and the real adapter's network
+ * client is untestable.
+ */
+export function channelsFor(channel, userId) {
+	const channels = [
+		`channel_all.${channel.channel}`,
+		`channel_user.${channel.channel}.${userId}`,
+		`users.${userId}`
+	];
+
+	if (channel.is_moderator) {
+		channels.push(`channel_speakers.${channel.channel}`);
+	}
+
+	return channels;
+}
+
 export class PubNubRoomEvents extends Emitter {
 	constructor({ publishKey, subscribeKey, userId, log = () => {} } = {}) {
 		super();
@@ -98,6 +118,31 @@ export class PubNubRoomEvents extends Emitter {
 		this.userId = userId;
 		this.log = log;
 		this._pubnub = null;
+	}
+
+	/**
+	 * One incoming message. Split from subscribe() so the dispatch rules -
+	 * emit everything, log what nothing handles - are testable on the real
+	 * adapter rather than asserted against the Fake and hoped for here.
+	 */
+	_dispatch(message) {
+		if (!message?.action) {
+			return;
+		}
+
+		// Every action is emitted, not just the known ones. The old
+		// allowlist bought nothing - an action with no handler is a
+		// no-op either way - and silently swallowed everything the 2021
+		// client never knew about, which is where live chat was found.
+		//
+		// Logged on whether anything is actually listening, not against
+		// a list: handle an action and it stops being reported, with no
+		// second place to remember to update.
+		if (!this.hasHandlers(message.action)) {
+			this.log(`[room:pubnub] no handler for "${message.action}" ${JSON.stringify(message).slice(0, 300)}`);
+		}
+
+		this.emit(message.action, message);
 	}
 
 	async subscribe(channel) {
@@ -114,39 +159,11 @@ export class PubNubRoomEvents extends Emitter {
 		});
 
 		this._pubnub.addListener({
-			message: ({ message }) => {
-				if (!message?.action) {
-					return;
-				}
-
-				// Every action is emitted, not just the known ones. The old
-				// allowlist bought nothing - an action with no handler is a
-				// no-op either way - and silently swallowed everything the 2021
-				// client never knew about, which is where live chat was found.
-				//
-				// Logged on whether anything is actually listening, not against
-				// a list: handle an action and it stops being reported, with no
-				// second place to remember to update.
-				if (!this.hasHandlers(message.action)) {
-					this.log(`[room:pubnub] no handler for "${message.action}" ${JSON.stringify(message).slice(0, 300)}`);
-				}
-
-				this.emit(message.action, message);
-			},
+			message: ({ message }) => this._dispatch(message),
 			status: event => this.log(`[room:pubnub] ${event.category}`)
 		});
 
-		const channels = [
-			`channel_all.${channel.channel}`,
-			`channel_user.${channel.channel}.${this.userId}`,
-			`users.${this.userId}`
-		];
-
-		if (channel.is_moderator) {
-			channels.push(`channel_speakers.${channel.channel}`);
-		}
-
-		this._pubnub.subscribe({ channels });
+		this._pubnub.subscribe({ channels: channelsFor(channel, this.userId) });
 	}
 
 	async unsubscribe() {

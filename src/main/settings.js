@@ -24,9 +24,17 @@ export class Settings {
 		return this.store.get(key, DEFAULTS[key]);
 	}
 
-	update(patch = {}) {
-		for (const [key, value] of Object.entries(patch)) {
-			this.store.set(key, value);
+	update(patch) {
+		// Defensive on both counts: this is an IPC boundary. A non-object
+		// patch has nothing to store, and electron-store throws on undefined
+		// values - which would reject the invoke and strand the renderer's
+		// await, for a call the caller meant as fire-and-forget.
+		if (patch && typeof patch === "object" && !Array.isArray(patch)) {
+			for (const [key, value] of Object.entries(patch)) {
+				if (value !== undefined) {
+					this.store.set(key, value);
+				}
+			}
 		}
 
 		return this.all();

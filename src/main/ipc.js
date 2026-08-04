@@ -12,6 +12,7 @@ import { endpoints } from "../shared/api/endpoints.js";
 import { SERVICES } from "../shared/profile.js";
 import { nodeTransport } from "./transport.js";
 import { redact } from "./redact.js";
+import { stripTokens } from "./session.js";
 
 export function registerIpc({ session, settings, verbose = false }) {
 	const client = new ClubhouseClient({
@@ -38,7 +39,17 @@ export function registerIpc({ session, settings, verbose = false }) {
 	for (const [name, fn] of Object.entries(endpoints)) {
 		ipcMain.handle(`api:${name}`, async (_event, ...args) => {
 			try {
-				const data = await fn(client, ...args);
+				let data = await fn(client, ...args);
+
+				// The one response that carries credentials. Capture them here,
+				// where the token can be stored without ever reaching the
+				// renderer - handing it over and asking for it back is how the
+				// old design let every page script read a live session.
+				if (name === "completePhoneAuth" && data?.auth_token) {
+					session.signIn(data);
+					data = stripTokens(data);
+				}
+
 				return { ok: true, data };
 			} catch (error) {
 				return {
@@ -52,12 +63,18 @@ export function registerIpc({ session, settings, verbose = false }) {
 	// --- session --------------------------------------------------------
 	ipcMain.handle("session:get", () => ({
 		signedIn: session.isSignedIn(),
-		user: session.user,
+		// Tokens stay on this side of the bridge, always.
+		user: session.publicUser,
 		services: SERVICES
 	}));
 
 	ipcMain.handle("session:signIn", (_event, authResult) => {
-		session.signIn(authResult);
+		if (authResult && typeof authResult === "object") {
+			// Whatever arrives from the renderer is profile data at most;
+			// signIn keeps the tokens main already captured.
+			session.signIn(authResult);
+		}
+
 		return { ok: true };
 	});
 

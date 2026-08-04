@@ -46,9 +46,11 @@ async function save() {
 	const results = await Promise.all(wanted);
 	saving.value = false;
 
-	const failed = results.find(r => r && r.success === false);
-	if (failed) {
-		notify({ type: "error", message: failed.error_message || "Some changes were rejected." });
+	// run() returns null on failure, having already shown the error as a
+	// toast. (It never resolves to { success: false } - the client throws on
+	// that before run sees it.) Stay here so the rejected edit is still in
+	// the form to fix, rather than announcing success and discarding it.
+	if (results.some(r => r === null)) {
 		return;
 	}
 

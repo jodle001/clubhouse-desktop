@@ -22,24 +22,35 @@ const room = useSharedRoom();
  * Join what the URL names. Also the room-to-room path: vue-router reuses this
  * component when only :channel changes, so without the watch a link from one
  * room to another would show the old room under the new address.
+ *
+ * Serialised: navigating again while a join is in flight queues behind it
+ * rather than racing it, so two joins can never orphan an audio engine.
  */
-async function ensureJoined() {
-	if (room.channel.info?.channel === props.channel) {
-		return;
-	}
+let transition = Promise.resolve();
 
-	if (room.channel.info) {
-		await room.leave();
-	}
+function ensureJoined() {
+	transition = transition.then(async () => {
+		if (room.channel.info?.channel === props.channel) {
+			return;
+		}
 
-	const ok = await room.join(props.channel, {
-		userId: state.user?.user_profile?.user_id,
-		audioEnabled: state.settings.audioEnabled
+		if (room.channel.info) {
+			await room.leave();
+		}
+
+		const ok = await room.join(props.channel, {
+			userId: state.user?.user_profile?.user_id,
+			audioEnabled: state.settings.audioEnabled
+		});
+
+		// Only bail out if this join is still the one the URL asks for - a
+		// queued navigation may already be about to run.
+		if (!ok && !room.channel.info) {
+			router.replace({ name: "home" });
+		}
 	});
 
-	if (!ok) {
-		router.replace({ name: "home" });
-	}
+	return transition;
 }
 
 onMounted(ensureJoined);

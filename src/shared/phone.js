@@ -55,7 +55,13 @@ export function composePhone(country, local) {
 	}
 
 	if (country && country.trunk) {
-		digits = digits.replace(/^0+/, "");
+		// The prefix is per-country: usually 0, but Russia and Kazakhstan
+		// write 8 916... and Hungary 06 30... - stripping only 0 from those
+		// composed +789... , a wrong number with no hint why.
+		const prefix = typeof country.trunk === "string" ? country.trunk : "0";
+		if (digits.startsWith(prefix)) {
+			digits = digits.slice(prefix.length);
+		}
 	}
 
 	if (!country) {
@@ -70,6 +76,19 @@ export function composePhone(country, local) {
 	}
 
 	return "+" + country.dial + digits;
+}
+
+/**
+ * The digits of a verification code, or "" when it cannot be one.
+ *
+ * Clubhouse sends 6 digits today; older accounts got 4. The old client
+ * demanded exactly 4 and silently did nothing otherwise. Shared so the form
+ * and its tests use one guard - a test re-implementing this privately would
+ * keep passing while the form regressed.
+ */
+export function verificationCode(raw) {
+	const digits = String(raw || "").replace(/\D/g, "");
+	return digits.length >= 4 && digits.length <= 8 ? digits : "";
 }
 
 /**

@@ -8,10 +8,25 @@ describe("audio port", () => {
 	});
 
 	it("falls back to silence when the SDK cannot load", async () => {
-		const log = vi.fn();
-		// agora-rtc-sdk-ng is optional, so this exercises the real fallback.
-		const engine = await createAudioEngine({ enabled: true, log });
-		expect(["agora", "null"]).toContain(engine.name);
+		// Deterministically broken, not "whatever this machine has installed" -
+		// the old version accepted both outcomes and so tested neither.
+		vi.doMock("agora-rtc-sdk-ng", () => {
+			throw new Error("broken install");
+		});
+
+		try {
+			vi.resetModules();
+			const fresh = await import("@/audio/index.js");
+
+			const log = vi.fn();
+			const engine = await fresh.createAudioEngine({ enabled: true, log });
+
+			expect(engine.name).toBe("null");
+			expect(log.mock.calls.flat().join(" ")).toContain("running silent");
+		} finally {
+			vi.doUnmock("agora-rtc-sdk-ng");
+			vi.resetModules();
+		}
 	});
 
 	it("lets a room be joined and left without any SDK", async () => {

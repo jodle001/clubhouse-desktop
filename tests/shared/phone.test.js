@@ -46,6 +46,20 @@ describe("composePhone", () => {
 		expect(composePhone(IT, "06 1234 5678")).toBe("+390612345678");
 	});
 
+	it("strips Russia's trunk 8, not a zero it does not use", () => {
+		// The universal national form is 8 916 ... - stripping only zeros
+		// composed +789..., a wrong number with no hint why.
+		expect(composePhone(findCountry("RU"), "8 916 123-45-67")).toBe("+79161234567");
+	});
+
+	it("strips Hungary's two-digit 06", () => {
+		expect(composePhone(findCountry("HU"), "06 30 123 4567")).toBe("+36301234567");
+	});
+
+	it("leaves a Russian number that never had the 8", () => {
+		expect(composePhone(findCountry("RU"), "916 123 45 67")).toBe("+79161234567");
+	});
+
 	it("returns empty when there is nothing to compose", () => {
 		expect(composePhone(US, "")).toBe("");
 	});

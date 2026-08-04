@@ -2,11 +2,31 @@
  * Auth state and the persistent device id, owned by the main process.
  *
  * The renderer never sees the token: it calls IPC, main attaches credentials.
- * That is what makes contextIsolation worth having.
+ * That is what makes contextIsolation worth having - and it is enforced here,
+ * not merely intended. Everything that leaves this class for the renderer goes
+ * through stripTokens(), and the sign-in result is captured in ipc.js before
+ * the renderer ever receives it.
  */
 
 import Store from "electron-store";
 import { newDeviceId } from "../shared/profile.js";
+
+/** Every key Clubhouse has ever used for a credential. */
+const TOKEN_KEYS = ["auth_token", "access_token", "refresh_token"];
+
+/** A copy safe to hand to the renderer: the person, minus the credentials. */
+export function stripTokens(user) {
+	if (!user || typeof user !== "object") {
+		return user;
+	}
+
+	const clone = { ...user };
+	for (const key of TOKEN_KEYS) {
+		delete clone[key];
+	}
+
+	return clone;
+}
 
 export class Session {
 	constructor(store = new Store({ name: "session" })) {
@@ -31,33 +51,41 @@ export class Session {
 		};
 	}
 
+	/** Full record, tokens included. Never send this over IPC. */
 	get user() {
 		return this.store.get("user") || null;
+	}
+
+	/** What session:get answers with. */
+	get publicUser() {
+		return stripTokens(this.user);
 	}
 
 	isSignedIn() {
 		return Boolean(this.store.get("user")?.auth_token);
 	}
 
+	/**
+	 * Store a sign-in. Token fields are only ever accepted from the API
+	 * response captured in main - anything arriving from the renderer has been
+	 * stripped, so merging keeps the credentials this class already holds
+	 * rather than letting a tokenless update erase them.
+	 */
 	signIn(authResult) {
-		this.store.set("user", authResult);
+		const existing = this.store.get("user") || {};
+		const kept = {};
+		for (const key of TOKEN_KEYS) {
+			if (authResult?.[key]) {
+				kept[key] = authResult[key];
+			} else if (existing[key]) {
+				kept[key] = existing[key];
+			}
+		}
+
+		this.store.set("user", { ...stripTokens(authResult), ...kept });
 	}
 
 	signOut() {
 		this.store.delete("user");
-	}
-
-	/** Merge fresh tokens from /refresh_token without losing the profile. */
-	updateTokens({ access, refresh }) {
-		const user = this.user;
-		if (!user) {
-			return;
-		}
-
-		this.store.set("user", {
-			...user,
-			access_token: access ?? user.access_token,
-			refresh_token: refresh ?? user.refresh_token
-		});
 	}
 }

@@ -28,8 +28,13 @@ export async function loadSession() {
 
 export async function signIn(authResult) {
 	await window.clubhouse.session.signIn(authResult);
-	state.signedIn = Boolean(authResult?.auth_token);
-	state.user = authResult;
+
+	// Main is the authority. The auth result reaching this side is stripped of
+	// tokens - main captured them before answering - so checking auth_token
+	// here would conclude the sign-in failed precisely because it worked.
+	const session = await window.clubhouse.session.get();
+	state.signedIn = session.signedIn;
+	state.user = session.user;
 }
 
 export async function signOut() {

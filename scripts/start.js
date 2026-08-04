@@ -41,4 +41,11 @@ if (appArgs.length > 0) {
 
 const run = spawnSync(bin, previewArgs, options);
 
-process.exit(run.status ?? 0);
+// status is null when the child died by signal (a SIGSEGV in Electron, say);
+// `?? 0` reported that as success to anything scripting around us.
+if (run.signal) {
+	console.error(`electron-vite was killed by ${run.signal}`);
+	process.exit(1);
+}
+
+process.exit(run.status ?? 1);

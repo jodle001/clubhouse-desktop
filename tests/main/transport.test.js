@@ -36,6 +36,12 @@ beforeAll(async () => {
 				return;
 			}
 
+			if (req.url.endsWith("/missing")) {
+				res.writeHead(404, { "Content-Type": "application/json" });
+				res.end(JSON.stringify({ error_message: "nope" }));
+				return;
+			}
+
 			res.writeHead(200, { "Content-Type": "application/json" });
 			res.end(JSON.stringify({ success: true }));
 		});
@@ -101,9 +107,12 @@ describe("nodeTransport", () => {
 	});
 
 	it("reports a non-2xx through ok/status rather than throwing", async () => {
-		const response = await nodeTransport(`${root}/x`, { method: "POST", headers: {}, body: "{}" });
-		expect(response.ok).toBe(true);
-		expect(response.status).toBe(200);
+		// An actual 404 - the old version of this test asked for a route the
+		// fixture answered 200, so it could not fail.
+		const response = await nodeTransport(`${root}/missing`, { method: "POST", headers: {}, body: "{}" });
+		expect(response.ok).toBe(false);
+		expect(response.status).toBe(404);
+		expect(JSON.parse(await response.text())).toEqual({ error_message: "nope" });
 	});
 
 	it("rejects rather than hanging when the host is unreachable", async () => {

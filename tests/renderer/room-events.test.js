@@ -1,5 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { ACTIONS, createRoomEvents, FakeRoomEvents, NullRoomEvents } from "@/room/index.js";
+import { describe, expect, it, vi } from "vitest";
+import {
+	ACTIONS,
+	channelsFor,
+	createRoomEvents,
+	FakeRoomEvents,
+	NullRoomEvents,
+	PubNubRoomEvents
+} from "@/room/index.js";
 
 describe("room events port", () => {
 	it("falls back to null without keys", async () => {
@@ -52,5 +59,63 @@ describe("room events port", () => {
 		const events = new FakeRoomEvents();
 		expect(() => events.deliver({})).not.toThrow();
 		expect(() => events.deliver(null)).not.toThrow();
+	});
+});
+
+describe("the real PubNub adapter's dispatch", () => {
+	// _dispatch is what the network listener calls; testing it on the real
+	// class means reintroducing an allowlist here would fail tests, instead
+	// of only failing the Fake that documents the contract.
+	const make = () => {
+		const log = vi.fn();
+		return { events: new PubNubRoomEvents({ userId: 9, log }), log };
+	};
+
+	it("emits actions it has never heard of", () => {
+		const { events } = make();
+		const seen = [];
+		events.on("brand_new_action", m => seen.push(m.value));
+
+		events._dispatch({ action: "brand_new_action", value: 42 });
+		expect(seen).toEqual([42]);
+	});
+
+	it("logs only what nothing is listening for", () => {
+		const { events, log } = make();
+		events.on("handled", () => {});
+
+		events._dispatch({ action: "handled" });
+		expect(log).not.toHaveBeenCalled();
+
+		events._dispatch({ action: "unhandled_thing" });
+		expect(log).toHaveBeenCalledOnce();
+		expect(log.mock.calls[0][0]).toContain("unhandled_thing");
+	});
+
+	it("ignores messages with no action", () => {
+		const { events, log } = make();
+		expect(() => events._dispatch(null)).not.toThrow();
+		expect(() => events._dispatch({})).not.toThrow();
+		expect(log).not.toHaveBeenCalled();
+	});
+});
+
+describe("the channel names a room rides on", () => {
+	// Wrong strings here kill every live update silently - the exact failure
+	// class this codebase kept shipping.
+	it("subscribes to the room, your user channel, and your inbox", () => {
+		expect(channelsFor({ channel: "abc" }, 9)).toEqual([
+			"channel_all.abc",
+			"channel_user.abc.9",
+			"users.9"
+		]);
+	});
+
+	it("adds the speakers channel for a moderator", () => {
+		expect(channelsFor({ channel: "abc", is_moderator: true }, 9)).toContain("channel_speakers.abc");
+	});
+
+	it("does not give a listener the moderator channel", () => {
+		expect(channelsFor({ channel: "abc", is_moderator: false }, 9)).toHaveLength(3);
 	});
 });
