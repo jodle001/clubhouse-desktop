@@ -69,23 +69,53 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		return reactions.value.find(r => r.userId === userId)?.emoji || null;
 	}
 
-	async function sendReaction(emoji) {
+	async function sendReaction(option) {
 		const info = channel.info;
-		if (!info || !emoji) {
+		if (!info || !option) {
 			return false;
 		}
 
 		try {
-			await call("sendChannelReaction", info.channel, emoji);
+			// The id when the room supplied one; the emoji as a last resort, so
+			// a shape this parser has not met still produces a server error
+			// that names what it wanted rather than a dead button.
+			await call("sendChannelReaction", info.channel, option.id ?? option.emoji);
 			// Our own reaction comes back over PubNub too, but not always, and
 			// never instantly - showing it now is what makes the button feel
 			// like it did something. showReaction dedupes per person.
-			showReaction(info.user_profile_id, emoji);
+			showReaction(info.user_profile_id, option.emoji);
 			return true;
 		} catch (err) {
 			chat.error = err.message;
 			return false;
 		}
+	}
+
+	/**
+	 * The room's palette, as { id, emoji }. join_channel carries it twice:
+	 * emoji_reactions.channel_reactions is bare emoji strings, and
+	 * reactions.channel_reactions is objects carrying the reaction_id that
+	 * /send_channel_reaction demands ("Reaction id is required." when sent the
+	 * emoji itself). Field names inside those objects are taken defensively,
+	 * since they are known only from observation.
+	 */
+	function parseReactionOptions(info) {
+		const rich = info.reactions?.channel_reactions;
+
+		if (Array.isArray(rich) && rich.length && typeof rich[0] === "object") {
+			// One line so a verbose log records the true shape.
+			console.log("[room] reaction option shape:", JSON.stringify(rich[0]));
+
+			return rich
+				.map(r => ({
+					id: r.reaction_id ?? r.id ?? null,
+					emoji: r.emoji ?? r.reaction ?? r.display_emoji ?? r.name ?? null
+				}))
+				.filter(r => r.emoji);
+		}
+
+		const plain = info.emoji_reactions?.channel_reactions || info.emoji_reaction_options || [];
+		return plain.map(emoji => ({ id: null, emoji }));
 	}
 
 	let audio = null;
@@ -498,9 +528,7 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			chat.nextCursor = null;
 			chat.total = 0;
 
-			// What this room lets people send. Two shapes seen in the wild.
-			reactionOptions.value =
-				info.emoji_reactions?.channel_reactions || info.emoji_reaction_options || [];
+			reactionOptions.value = parseReactionOptions(info);
 
 			if (chat.enabled) {
 				// After subscribing, so anything said while this was in flight

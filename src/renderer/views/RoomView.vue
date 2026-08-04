@@ -290,13 +290,13 @@ async function send() {
 						<!-- The room's own list from join_channel, not ours. -->
 						<div v-if="picking" class="room__palette">
 							<button
-								v-for="emoji in room.reactionOptions.value"
-								:key="emoji"
+								v-for="option in room.reactionOptions.value"
+								:key="option.id ?? option.emoji"
 								class="room__palette-emoji"
 								type="button"
-								@click="react(emoji)"
+								@click="react(option)"
 							>
-								{{ emoji }}
+								{{ option.emoji }}
 							</button>
 						</div>
 					</div>

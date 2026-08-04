@@ -83,23 +83,27 @@ export const endpoints = {
 	 * its fields, and unlike /get_chat_messages, which rejects every shape tried
 	 * with an empty error_message and names nothing.
 	 *
-	 * Newest first, and paginated: the response carries next_cursor and
-	 * num_messages, and passing the cursor back continues into older messages.
+	 * Newest first, and paginated: the response carries next_cursor (the
+	 * oldest message's time as epoch microseconds) and num_messages. Passed
+	 * back as `cursor` the server ignored it and re-sent page one, so it goes
+	 * under both plausible names - unknown GET parameters are demonstrably
+	 * ignored, and the caller's no-progress guard makes a wrong guess safe.
 	 */
 	getChannelMessages: (c, { channel, cursor } = {}) =>
-		c.request("/get_channel_messages", { query: { channel, cursor } }),
+		c.request("/get_channel_messages", { query: { channel, cursor, next_cursor: cursor } }),
 
 	/** `{ channel, message }` - the API named `message` itself, on a 400. */
 	sendChatMessage: (c, { channel, message } = {}) =>
 		c.request("/send_channel_message", { body: { channel, message } }),
 
 	/**
-	 * An emoji over the room. The endpoint named `channel` on a 400; the
-	 * PubNub event it produces is `new_channel_reaction`. join_channel's
-	 * emoji_reactions.channel_reactions lists what may be sent.
+	 * An emoji over the room. The endpoint named both its fields on 400s:
+	 * `channel`, then - when sent an emoji under `reaction` - "Reaction id is
+	 * required." The ids live in join_channel's `reactions.channel_reactions`
+	 * objects, the id-bearing twin of the emoji_reactions string list.
 	 */
-	sendChannelReaction: (c, channel, reaction) =>
-		c.request("/send_channel_reaction", { body: { channel, reaction } }),
+	sendChannelReaction: (c, channel, reactionId) =>
+		c.request("/send_channel_reaction", { body: { channel, reaction_id: reactionId } }),
 
 	/**
 	 * Liking one chat message. Both named `channel` on a 400; history rows

@@ -29,7 +29,16 @@ function joinWith(extra = {}) {
 			user_profile_id: 9,
 			users: [{ user_id: 9, name: "Me" }, { user_id: 5, name: "Them" }],
 			user_capabilities: {},
+			// Both forms, as the real response carries them: bare emoji, and
+			// the id-bearing objects /send_channel_reaction actually wants.
 			emoji_reactions: { channel_reactions: ["❤", "😂", "🔥"] },
+			reactions: {
+				channel_reactions: [
+					{ reaction_id: 101, emoji: "❤" },
+					{ reaction_id: 102, emoji: "😂" },
+					{ reaction_id: 103, emoji: "🔥" }
+				]
+			},
 			...extra
 		}
 	});
@@ -46,12 +55,28 @@ afterEach(() => {
 });
 
 describe("emoji over the room", () => {
-	it("takes its palette from the room, not from us", async () => {
+	it("takes its palette from the room, with the ids the sender needs", async () => {
 		joinWith();
 		const room = makeRoom();
 		await room.join("C1", { userId: 9 });
 
-		expect(room.reactionOptions.value).toEqual(["❤", "😂", "🔥"]);
+		expect(room.reactionOptions.value).toEqual([
+			{ id: 101, emoji: "❤" },
+			{ id: 102, emoji: "😂" },
+			{ id: 103, emoji: "🔥" }
+		]);
+	});
+
+	it("falls back to bare emoji when the room sends no id objects", async () => {
+		joinWith({ reactions: undefined });
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		expect(room.reactionOptions.value).toEqual([
+			{ id: null, emoji: "❤" },
+			{ id: null, emoji: "😂" },
+			{ id: null, emoji: "🔥" }
+		]);
 	});
 
 	it("shows a reaction arriving over PubNub on that person's tile", async () => {
@@ -87,17 +112,29 @@ describe("emoji over the room", () => {
 		expect(room.reactionFor(5)).toBe("😂");
 	});
 
-	it("sends through the API and shows your own immediately", async () => {
-		// The echo over PubNub is neither guaranteed nor instant; a reaction
-		// button that does nothing visible feels broken even when it worked.
+	it("sends the id, not the emoji, and shows your own immediately", async () => {
+		// "Reaction id is required." is what sending the emoji got. The echo
+		// over PubNub is neither guaranteed nor instant; a reaction button
+		// that does nothing visible feels broken even when it worked.
 		joinWith();
 		const room = makeRoom();
 		await room.join("C1", { userId: 9 });
 
-		await expect(room.sendReaction("❤")).resolves.toBe(true);
+		await expect(room.sendReaction(room.reactionOptions.value[0])).resolves.toBe(true);
 
-		expect(bridge.api.sendChannelReaction).toHaveBeenCalledWith("C1", "❤");
+		expect(bridge.api.sendChannelReaction).toHaveBeenCalledWith("C1", 101);
 		expect(room.reactionFor(9)).toBe("❤");
+	});
+
+	it("falls back to the emoji when no id is known", async () => {
+		// A wrong guess then draws a server error that names the field,
+		// which beats a button that silently cannot send.
+		joinWith({ reactions: undefined });
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		await room.sendReaction(room.reactionOptions.value[0]);
+		expect(bridge.api.sendChannelReaction).toHaveBeenCalledWith("C1", "❤");
 	});
 
 	it("reports a refused reaction instead of pretending", async () => {
@@ -109,7 +146,7 @@ describe("emoji over the room", () => {
 			.fn()
 			.mockResolvedValue({ ok: false, error: { message: "Nope", status: 400 } });
 
-		await expect(room.sendReaction("❤")).resolves.toBe(false);
+		await expect(room.sendReaction(room.reactionOptions.value[0])).resolves.toBe(false);
 		expect(room.reactionFor(9)).toBeNull();
 		expect(room.chat.error).toBe("Nope");
 	});
