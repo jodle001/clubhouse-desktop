@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import AppNav from "./components/AppNav.vue";
+import MiniPlayer from "./components/MiniPlayer.vue";
 import ToastHost from "./components/ToastHost.vue";
 import { useSession } from "./composables/useSession.js";
 
@@ -12,6 +13,9 @@ const { state } = useSession();
 const showNav = computed(
 	() => state.signedIn && !["login", "verify", "waitlist"].includes(route.name)
 );
+
+// The room itself already shows its own controls.
+const showMini = computed(() => showNav.value && route.name !== "room");
 </script>
 
 <template>
@@ -22,6 +26,7 @@ const showNav = computed(
 				<component :is="Component" />
 			</RouterView>
 		</main>
+		<MiniPlayer v-if="showMini" />
 		<ToastHost />
 	</div>
 </template>

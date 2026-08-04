@@ -1,7 +1,7 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { useRoom } from "../composables/useRoom.js";
+import { useSharedRoom } from "../composables/useRoom.js";
 import { useSession, updateSettings } from "../composables/useSession.js";
 import SpeakerTile from "../components/SpeakerTile.vue";
 import ProfileSheet from "../components/ProfileSheet.vue";
@@ -12,9 +12,26 @@ const props = defineProps({ channel: { type: String, required: true } });
 
 const router = useRouter();
 const { state } = useSession();
-const room = useRoom();
 
-onMounted(async () => {
+// The app's one shared room. This view is a window onto it, not its owner:
+// navigating away no longer hangs up, and coming back finds the call as it
+// was. Only the Leave button, end_channel or the server's should_leave end it.
+const room = useSharedRoom();
+
+/**
+ * Join what the URL names. Also the room-to-room path: vue-router reuses this
+ * component when only :channel changes, so without the watch a link from one
+ * room to another would show the old room under the new address.
+ */
+async function ensureJoined() {
+	if (room.channel.info?.channel === props.channel) {
+		return;
+	}
+
+	if (room.channel.info) {
+		await room.leave();
+	}
+
 	const ok = await room.join(props.channel, {
 		userId: state.user?.user_profile?.user_id,
 		audioEnabled: state.settings.audioEnabled
@@ -23,9 +40,10 @@ onMounted(async () => {
 	if (!ok) {
 		router.replace({ name: "home" });
 	}
-});
+}
 
-onUnmounted(() => room.leave());
+onMounted(ensureJoined);
+watch(() => props.channel, ensureJoined);
 
 async function exit() {
 	await room.leave();

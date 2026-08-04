@@ -13,23 +13,37 @@ const username = ref("");
 const bio = ref("");
 const saving = ref(false);
 
+/** What the server currently has, so saving only sends what changed. */
+const original = { name: "", username: "", bio: "" };
+
 onMounted(async () => {
 	const result = await run("me");
 	const profile = result?.user_profile;
 	if (profile) {
-		name.value = profile.name || "";
-		username.value = profile.username || "";
-		bio.value = profile.bio || "";
+		name.value = original.name = profile.name || "";
+		username.value = original.username = profile.username || "";
+		bio.value = original.bio = profile.bio || "";
 	}
 });
 
 async function save() {
 	saving.value = true;
-	const results = await Promise.all([
-		run("updateName", name.value.trim()),
-		run("updateUsername", username.value.trim()),
-		run("updateBio", bio.value)
-	]);
+
+	// Only the fields that changed. Clubhouse limits how often a name or
+	// username may change, so re-submitting an untouched one risks spending
+	// that allowance on nothing.
+	const wanted = [];
+	if (name.value.trim() !== original.name) {
+		wanted.push(run("updateName", name.value.trim()));
+	}
+	if (username.value.trim() !== original.username) {
+		wanted.push(run("updateUsername", username.value.trim()));
+	}
+	if (bio.value !== original.bio) {
+		wanted.push(run("updateBio", bio.value));
+	}
+
+	const results = await Promise.all(wanted);
 	saving.value = false;
 
 	const failed = results.find(r => r && r.success === false);
@@ -38,7 +52,9 @@ async function save() {
 		return;
 	}
 
-	notify({ type: "success", message: "Profile updated." });
+	if (results.length) {
+		notify({ type: "success", message: "Profile updated." });
+	}
 	router.push({ name: "me" });
 }
 </script>

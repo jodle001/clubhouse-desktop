@@ -2,9 +2,11 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { useSession } from "../composables/useSession.js";
+import { useSharedRoom } from "../composables/useRoom.js";
 
 const router = useRouter();
 const { state, signOut } = useSession();
+const room = useSharedRoom();
 const query = ref("");
 
 function search() {
@@ -15,6 +17,9 @@ function search() {
 }
 
 async function logout() {
+	// Hang up before handing back the token; the room outlives navigation now,
+	// so nothing else will.
+	await room.leave().catch(() => {});
 	await signOut();
 	router.push({ name: "login" });
 }

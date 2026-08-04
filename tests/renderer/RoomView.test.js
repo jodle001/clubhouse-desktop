@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 import RoomView from "@/views/RoomView.vue";
+import { useSharedRoom } from "@/composables/useRoom.js";
 import { stubBridge } from "../setup.js";
 import { sessionState } from "@/composables/useSession.js";
 
@@ -9,11 +10,16 @@ vi.mock("vue-router", () => ({
 	useRoute: () => ({})
 }));
 
-// The view builds its own room, so the only way to keep the real Agora SDK out
-// of a test that turns audio on is to swap the factory.
+// The shared room uses the real factories, so swap both: Agora must not load,
+// and PubNub must not open sockets from a test.
 vi.mock("@/audio/index.js", async () => {
 	const actual = await vi.importActual("@/audio/index.js");
 	return { ...actual, createAudioEngine: async () => new actual.FakeAudioEngine() };
+});
+
+vi.mock("@/room/index.js", async () => {
+	const actual = await vi.importActual("@/room/index.js");
+	return { ...actual, createRoomEvents: async () => new actual.FakeRoomEvents() };
 });
 
 const joinResult = (overrides = {}) => ({
@@ -42,6 +48,12 @@ beforeEach(() => {
 	bridge.api.leaveChannel = vi.fn().mockResolvedValue({ ok: true, data: {} });
 	// The real handler answers with the whole settings object.
 	bridge.settings.set = vi.fn(patch => Promise.resolve({ ...patch }));
+});
+
+// The room is a module singleton now - that is the feature - so each test must
+// hang up, or the next one starts inside this one's room.
+afterEach(async () => {
+	await useSharedRoom().leave();
 });
 
 function mountRoom() {
@@ -197,6 +209,63 @@ describe("raising a hand", () => {
 		await settle(wrapper);
 
 		expect(barText(wrapper)).toMatch(/Raise hand/);
+	});
+});
+
+describe("the room outliving the view", () => {
+	it("does not hang up when the view unmounts", async () => {
+		// The old behaviour: onUnmounted called leave(), so opening Settings or
+		// a profile kicked you out of the room. The room belongs to the app now.
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		wrapper.unmount();
+		await new Promise(resolve => setTimeout(resolve, 10));
+
+		expect(bridge.api.leaveChannel).not.toHaveBeenCalled();
+		expect(useSharedRoom().channel.info).not.toBeNull();
+	});
+
+	it("finds the call as it was on returning, without rejoining", async () => {
+		const first = mountRoom();
+		await settle(first);
+		first.unmount();
+
+		const second = mountRoom();
+		await settle(second);
+
+		// One join for the whole journey: room -> Settings -> room.
+		expect(bridge.api.joinChannel).toHaveBeenCalledTimes(1);
+		expect(second.find(".room__topic").text()).toBe("God & Philosophy");
+	});
+
+	it("moves rooms when the URL names a different one", async () => {
+		// vue-router reuses the component when only :channel changes, so the
+		// watch is what makes a room-to-room link actually switch rooms.
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		bridge.api.joinChannel = vi
+			.fn()
+			.mockResolvedValue({ ok: true, data: joinResult({ channel: "C2", topic: "Second room" }) });
+
+		await wrapper.setProps({ channel: "C2" });
+		await settle(wrapper);
+
+		expect(bridge.api.leaveChannel).toHaveBeenCalledWith("C1");
+		expect(bridge.api.joinChannel).toHaveBeenCalledWith("C2");
+		expect(wrapper.find(".room__topic").text()).toBe("Second room");
+	});
+
+	it("still leaves for real from the Leave button", async () => {
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		await wrapper.find(".btn-danger").trigger("click");
+		await settle(wrapper);
+
+		expect(bridge.api.leaveChannel).toHaveBeenCalledWith("C1");
+		expect(useSharedRoom().channel.info).toBeNull();
 	});
 });
 

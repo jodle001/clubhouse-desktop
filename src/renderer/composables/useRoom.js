@@ -70,7 +70,10 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			const result = await call("getChannelMessages", { channel: channelName });
 			const history = messagesFrom(result).map(chatEntry);
 
-			history.sort((a, b) => String(a.time_created ?? "").localeCompare(String(b.time_created ?? "")));
+			// As times, not strings: the API sends offsets ('...-07:00'), and
+			// lexicographic order is only chronological while every stamp
+			// happens to share one.
+			history.sort((a, b) => (Date.parse(a.time_created) || 0) - (Date.parse(b.time_created) || 0));
 
 			for (const entry of history) {
 				addMessage(entry);
@@ -151,7 +154,11 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		}
 	}
 
-	const me = computed(() => channel.info?.users?.find(u => u.is_self) || null);
+	// By id, off the live list. There is no is_self flag in the real response -
+	// join_channel names you once, as user_profile_id.
+	const me = computed(
+		() => channel.users.find(u => u.user_id === channel.info?.user_profile_id) || null
+	);
 
 	/**
 	 * Read off the live user list rather than the join response, so a promotion
@@ -252,7 +259,15 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 				patchUser(message.user_id, { is_speaker: true });
 
 				if (message.user_id === info.user_profile_id) {
-					await audio?.setRole("host");
+					try {
+						await audio?.setRole("host");
+					} catch (err) {
+						// The stage promotion stands either way; only the audio
+						// side failed, and an emitter has nowhere to put a
+						// rejection.
+						audioError.value = err.message;
+					}
+
 					invite.value = null;
 					// You are up; the hand has served its purpose.
 					handRaised.value = false;
@@ -265,8 +280,13 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 				// Taken off stage: drop back to audience and stop publishing,
 				// rather than holding a live microphone nobody can hear.
 				if (message.user_id === info.user_profile_id) {
-					await audio?.setMuted(true);
-					await audio?.setRole("audience");
+					try {
+						await audio?.setMuted(true);
+						await audio?.setRole("audience");
+					} catch (err) {
+						audioError.value = err.message;
+					}
+
 					muted.value = true;
 				}
 			});
@@ -303,7 +323,21 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 
 			await events.subscribe(info);
 
-			pingTimer = setInterval(() => call("activePing", channelName).catch(() => {}), 30000);
+			// The ping's answer matters: should_leave is the server removing you
+			// - signed in elsewhere, or the room closed without an end_channel
+			// event reaching us. Ignoring it meant sitting in a dead room
+			// pinging it forever.
+			pingTimer = setInterval(async () => {
+				try {
+					const pong = await call("activePing", channelName);
+					if (pong?.should_leave) {
+						await leave();
+					}
+				} catch {
+					// A missed ping is not worth leaving over; the next one is
+					// thirty seconds away.
+				}
+			}, 30000);
 
 			// The server says whether this room has chat and whether we may
 			// post, so the UI follows its answer rather than assuming.
@@ -328,6 +362,10 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 
 			return true;
 		} catch (err) {
+			// join_channel may have succeeded before audio or events failed, in
+			// which case the server has us in the room. Withdraw properly
+			// rather than leaving a ghost that lingers until the ping times out.
+			await leave().catch(() => {});
 			error.value = err.message;
 			return false;
 		} finally {
@@ -472,4 +510,23 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		// exposed for tests
 		_internals: { upsertUser, removeUser, patchUser }
 	};
+}
+
+/**
+ * The one room the app is in, shared by every view.
+ *
+ * The room used to belong to RoomView, whose unmount hung up the call - so
+ * opening Settings, a profile or the hallway kicked you out. State that must
+ * outlive navigation cannot live in a component; this is the same shape as
+ * useSession's module singleton, created lazily so importing this file (as
+ * tests do, with injected fakes) never constructs an engine.
+ */
+let shared = null;
+
+export function useSharedRoom() {
+	if (!shared) {
+		shared = useRoom();
+	}
+
+	return shared;
 }

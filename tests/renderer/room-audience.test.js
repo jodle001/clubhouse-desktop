@@ -129,6 +129,78 @@ describe("the audience, grouped the way the phone app groups it", () => {
 	});
 });
 
+describe("the room's own bookkeeping", () => {
+	it("knows who you are by id, not by a flag the API does not send", async () => {
+		// There is no is_self field in a real join_channel response; the old
+		// `me` looked for one and so was always null.
+		joinWith([person(9), person(1, { is_speaker: true })]);
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		expect(room.me.value?.user_id).toBe(9);
+	});
+
+	it("withdraws server-side when joining fails half-way", async () => {
+		// join_channel succeeded, then audio refused: without rollback the
+		// server keeps a ghost in the room until the ping times out.
+		joinWith([person(9)]);
+		const room = useRoom({
+			makeAudio: async () => {
+				throw new Error("no microphone");
+			},
+			makeEvents: async () => new FakeRoomEvents()
+		});
+
+		await expect(room.join("C1", { userId: 9 })).resolves.toBe(false);
+
+		expect(bridge.api.leaveChannel).toHaveBeenCalledWith("C1");
+		expect(room.channel.info).toBeNull();
+		expect(room.error.value).toMatch(/no microphone/);
+	});
+
+	it("leaves when the ping answers should_leave", async () => {
+		vi.useFakeTimers();
+		try {
+			joinWith([person(9)]);
+			bridge.api.activePing = vi
+				.fn()
+				.mockResolvedValue({ ok: true, data: { success: true, should_leave: true } });
+
+			const room = makeRoom();
+			await room.join("C1", { userId: 9 });
+			expect(room.channel.info).not.toBeNull();
+
+			// The server saying "you are gone" - signed in elsewhere, or the
+			// room ended without the event reaching us.
+			await vi.advanceTimersByTimeAsync(30000);
+
+			expect(room.channel.info).toBeNull();
+			expect(bridge.api.leaveChannel).toHaveBeenCalledWith("C1");
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("stays when the ping merely fails", async () => {
+		vi.useFakeTimers();
+		try {
+			joinWith([person(9)]);
+			bridge.api.activePing = vi
+				.fn()
+				.mockResolvedValue({ ok: false, error: { message: "offline", status: 0 } });
+
+			const room = makeRoom();
+			await room.join("C1", { userId: 9 });
+
+			await vi.advanceTimersByTimeAsync(30000);
+
+			expect(room.channel.info).not.toBeNull();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+});
+
 describe("being invited to speak", () => {
 	beforeEach(() => {
 		bridge.api.becomeSpeaker = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
