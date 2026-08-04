@@ -145,14 +145,30 @@ routed at all.
 | `/get_notifications` | gone, no known replacement |
 | `/get_following`, `/get_followers` | gone, no known replacement |
 | `/get_profile`, `/search_users` | fine |
+| `GET /get_suggested_follows_all` | alive - people to follow, paginated |
+| `POST /get_suggested_follows_friends_only` | alive, wants parameters |
 | `POST /block`, `POST /unblock` | alive - `{ user_id }` |
 | `/audience_reply` | alive - raising a hand |
 | `POST /become_speaker` | alive - `{ channel }`, take the stage |
 | `/accept_speaker_invite` | gone, replaced by `/become_speaker` |
+| stepping down (8 names tried) | all gone; see below |
+| `POST /uninvite_speaker` | alive - `{ channel, user_id }` |
+| `POST /get_channel` | alive - one room's state, `{ channel }` |
+| discovery/explore/search-channels (14 names tried) | all gone |
 | `POST /get_blocked_users` | alive |
 | `POST /send_channel_message` | alive - `{ channel, message }` |
 | `GET /get_channel_messages` | alive - chat history, `?channel=` |
 | `GET /get_chat_messages` | exists, but rejects everything tried |
+
+Two conclusions from the 2026-08 probe worth stating plainly. There is no
+public room directory: every discovery, explore, trending and search-channels
+name answers a plain-text 404, so `/get_feed_v3` - rooms from people you follow
+and houses you are in - is the only room list this API serves, and the home
+screen is honest about that. And no self-service way off the stage was found;
+the one live verb in that family is `/uninvite_speaker`, which a moderator aims
+at somebody else. Whether it accepts your own user id - a moderator "uninviting"
+themselves - is untested, deliberately: that experiment takes you off a real
+stage, so it wants a willing tester rather than a probe.
 
 The home screen reads rooms out of the feed: `/get_feed_v3` answers
 `{ items, available_topics }`, and each item wraps one live room in a `channel`

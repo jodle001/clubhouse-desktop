@@ -126,6 +126,53 @@ const CANDIDATES = [
 	{ path: "/get_notifications_v2", method: "POST", body: {} },
 	{ path: "/get_channel", method: "POST", body: {} },
 
+	// --- reactions --------------------------------------------------------
+	// join_channel returns emoji_reaction_options and per-context reaction
+	// lists, PubNub delivers new_channel_reaction, and user_capabilities has
+	// can_gif_react - the feature is fully described except for the verb that
+	// sends one. Empty bodies, so nothing here can react on anybody's behalf.
+	{ path: "/send_channel_reaction", method: "POST", body: {} },
+	{ path: "/send_reaction", method: "POST", body: {} },
+	{ path: "/channel_reaction", method: "POST", body: {} },
+	{ path: "/send_emoji_reaction", method: "POST", body: {} },
+	{ path: "/react", method: "POST", body: {} },
+	{ path: "/send_audio_reaction", method: "POST", body: {} },
+	{ path: "/send_profile_reaction", method: "POST", body: {} },
+
+	// --- chat message likes ----------------------------------------------
+	// channel_message_like_count_update arrives over PubNub when somebody else
+	// likes a line, and history rows carry viewer_has_liked - so the sender
+	// exists under some name.
+	{ path: "/like_channel_message", method: "POST", body: {} },
+	{ path: "/unlike_channel_message", method: "POST", body: {} },
+	{ path: "/like_message", method: "POST", body: {} },
+	{ path: "/send_channel_message_like", method: "POST", body: {} },
+
+	// --- direct messages --------------------------------------------------
+	// /me reports unread_conversations_count and get_profile answers can_dm,
+	// can_chat and chatting_with, so conversations exist server-side.
+	{ path: "/get_conversations", method: "POST", body: {} },
+	{ path: "/get_conversations", method: "GET", query: {} },
+	{ path: "/get_chats", method: "POST", body: {} },
+	{ path: "/get_conversation", method: "POST", body: {} },
+	{ path: "/get_conversation_messages", method: "GET", query: {} },
+	{ path: "/send_conversation_message", method: "POST", body: {} },
+	{ path: "/create_conversation", method: "POST", body: {} },
+	{ path: "/get_message_requests", method: "POST", body: {} },
+
+	// --- waves ------------------------------------------------------------
+	// get_profile answers can_wave, so the verb exists.
+	{ path: "/wave", method: "POST", body: {} },
+	{ path: "/send_wave", method: "POST", body: {} },
+	{ path: "/wave_to_user", method: "POST", body: {} },
+
+	// --- room polls -------------------------------------------------------
+	// join_channel carries channel_user_poll with validation rules and an
+	// upsell card, so polls are live in rooms.
+	{ path: "/create_channel_user_poll", method: "POST", body: {} },
+	{ path: "/vote_channel_user_poll", method: "POST", body: {} },
+	{ path: "/get_channel_user_poll", method: "POST", body: {} },
+
 	// --- taking the stage ------------------------------------------------
 	// /accept_speaker_invite is retired (404), so being invited up currently
 	// cannot be accepted. join_channel marks the invitation on your own user
