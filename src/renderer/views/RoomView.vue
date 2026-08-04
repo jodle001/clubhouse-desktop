@@ -127,6 +127,32 @@ async function accept() {
 	accepting.value = false;
 }
 
+// The emoji picker over the room bar.
+const picking = ref(false);
+
+async function react(emoji) {
+	picking.value = false;
+	await room.sendReaction(emoji);
+}
+
+/**
+ * Reach the top of the chat and the past loads in, keeping the line you were
+ * reading where it was - jumping to the top of freshly-inserted history would
+ * lose the very place that prompted the scroll.
+ */
+async function maybeLoadOlder() {
+	const box = log.value;
+	if (!box || box.scrollTop > 40 || !room.chat.nextCursor || room.chat.loadingOlder) {
+		return;
+	}
+
+	const before = box.scrollHeight;
+	if (await room.loadOlder()) {
+		await nextTick();
+		box.scrollTop += box.scrollHeight - before;
+	}
+}
+
 async function send() {
 	sending.value = true;
 
@@ -185,6 +211,7 @@ async function send() {
 							v-for="user in room.speakers.value"
 							:key="user.user_id"
 							:user="user"
+							:reaction="room.reactionFor(user.user_id)"
 							:speaking="room.speakingUids.value.has(user.user_id)"
 							@select="viewing = user.user_id"
 						/>
@@ -200,6 +227,7 @@ async function send() {
 							v-for="user in room.followedBySpeakers.value"
 							:key="user.user_id"
 							:user="user"
+							:reaction="room.reactionFor(user.user_id)"
 							@select="viewing = user.user_id"
 						/>
 					</div>
@@ -212,6 +240,7 @@ async function send() {
 							v-for="user in room.houseMembers.value"
 							:key="user.user_id"
 							:user="user"
+							:reaction="room.reactionFor(user.user_id)"
 							@select="viewing = user.user_id"
 						/>
 					</div>
@@ -224,6 +253,7 @@ async function send() {
 							v-for="user in room.others.value"
 							:key="user.user_id"
 							:user="user"
+							:reaction="room.reactionFor(user.user_id)"
 							@select="viewing = user.user_id"
 						/>
 					</div>
@@ -246,6 +276,30 @@ async function send() {
 					<button v-if="!room.isSpeaker.value" class="btn btn-secondary" @click="room.toggleHand()">
 						{{ room.handRaised.value ? "✋ Hand raised" : "✋ Raise hand" }}
 					</button>
+
+					<div v-if="room.reactionOptions.value.length" class="room__react">
+						<button
+							class="btn btn-secondary"
+							:aria-expanded="picking"
+							title="React"
+							@click="picking = !picking"
+						>
+							😮
+						</button>
+
+						<!-- The room's own list from join_channel, not ours. -->
+						<div v-if="picking" class="room__palette">
+							<button
+								v-for="emoji in room.reactionOptions.value"
+								:key="emoji"
+								class="room__palette-emoji"
+								type="button"
+								@click="react(emoji)"
+							>
+								{{ emoji }}
+							</button>
+						</div>
+					</div>
 
 					<!--
 						A microphone that refuses used to do so silently, which
@@ -275,11 +329,24 @@ async function send() {
 
 					<EmptyState v-else-if="!room.chat.messages.length" message="No messages yet." />
 
-					<ul v-else ref="log" class="room__messages">
+					<ul v-else ref="log" class="room__messages" @scroll.passive="maybeLoadOlder">
+						<li v-if="room.chat.nextCursor" class="room__older muted">
+							{{ room.chat.loadingOlder ? "Loading…" : "Scroll up for earlier messages" }}
+						</li>
 						<li v-for="(message, i) in room.chat.messages" :key="message.message_id ?? i">
 							<strong>{{ message.user_profile?.name || message.name || "Someone" }}</strong>
 							<span>{{ message.message ?? message.text }}</span>
-							<span v-if="message.like_count" class="room__likes">♥ {{ message.like_count }}</span>
+							<button
+								v-if="message.message_id"
+								class="room__like"
+								:class="{ 'room__like--on': message.viewer_has_liked }"
+								:title="message.viewer_has_liked ? 'Unlike' : 'Like'"
+								type="button"
+								@click="room.toggleMessageLike(message)"
+							>
+								{{ message.viewer_has_liked ? "♥" : "♡" }}
+								<span v-if="message.like_count">{{ message.like_count }}</span>
+							</button>
 						</li>
 					</ul>
 
@@ -480,11 +547,60 @@ async function send() {
 	font-size: 0.85rem;
 }
 
-.room__likes {
+.room__like {
 	margin-left: 0.35rem;
-	font-size: 0.72rem;
+	padding: 0 0.2rem;
+	border: 0;
+	background: none;
+	cursor: pointer;
+	font: inherit;
+	font-size: 0.78rem;
 	color: var(--text-muted);
 	white-space: nowrap;
+}
+
+.room__like--on {
+	color: var(--danger);
+}
+
+.room__older {
+	text-align: center;
+	font-size: 0.72rem;
+	padding: 0.2rem 0;
+}
+
+/* --- reactions ----------------------------------------------------- */
+
+.room__react {
+	position: relative;
+}
+
+.room__palette {
+	position: absolute;
+	bottom: calc(100% + 0.6rem);
+	left: 50%;
+	transform: translateX(-50%);
+	display: grid;
+	grid-template-columns: repeat(8, auto);
+	gap: 0.15rem;
+	padding: 0.45rem;
+	background: var(--surface);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow);
+}
+
+.room__palette-emoji {
+	border: 0;
+	background: none;
+	cursor: pointer;
+	font-size: 1.15rem;
+	padding: 0.25rem;
+	border-radius: var(--radius-sm);
+	line-height: 1;
+}
+
+.room__palette-emoji:hover {
+	background: var(--surface-2);
 }
 
 .room__messages strong {

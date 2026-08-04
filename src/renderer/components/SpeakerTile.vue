@@ -3,7 +3,9 @@ import AppAvatar from "./AppAvatar.vue";
 
 defineProps({
 	user: { type: Object, required: true },
-	speaking: { type: Boolean, default: false }
+	speaking: { type: Boolean, default: false },
+	/** An emoji reaction floating over this person right now, or null. */
+	reaction: { type: String, default: null }
 });
 
 // The room decides what opening a profile means - here it is a sheet, not a
@@ -23,6 +25,11 @@ const emit = defineEmits(["select"]);
 			<AppAvatar :user="user" :size="76" />
 			<span v-if="user.is_muted" class="tile__badge" title="Muted">🔇</span>
 			<span v-else-if="user.hand_raised" class="tile__badge" title="Hand raised">✋</span>
+			<Transition name="tile-react">
+				<span v-if="reaction" :key="reaction" class="tile__reaction" aria-hidden="true">
+					{{ reaction }}
+				</span>
+			</Transition>
 		</div>
 		<span class="tile__name truncate">
 			<span v-if="user.is_moderator" title="Moderator">✳️</span>
@@ -78,6 +85,34 @@ const emit = defineEmits(["select"]);
 	display: grid;
 	place-items: center;
 	box-shadow: var(--shadow);
+}
+
+.tile__reaction {
+	position: absolute;
+	left: 50%;
+	top: -10px;
+	transform: translateX(-50%);
+	font-size: 1.4rem;
+	filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.35));
+	pointer-events: none;
+}
+
+.tile-react-enter-active {
+	transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.tile-react-leave-active {
+	transition: transform 0.4s ease, opacity 0.4s ease;
+}
+
+.tile-react-enter-from {
+	transform: translateX(-50%) translateY(8px) scale(0.6);
+	opacity: 0;
+}
+
+.tile-react-leave-to {
+	transform: translateX(-50%) translateY(-14px);
+	opacity: 0;
 }
 
 .tile__name {

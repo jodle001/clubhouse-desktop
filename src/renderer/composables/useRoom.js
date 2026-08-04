@@ -25,7 +25,68 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 	 */
 	const audioError = ref("");
 
-	const chat = reactive({ messages: [], enabled: false, canPost: false, error: "" });
+	const chat = reactive({
+		messages: [],
+		enabled: false,
+		canPost: false,
+		error: "",
+		/** Cursor into older history; null once the beginning is reached. */
+		nextCursor: null,
+		total: 0,
+		loadingOlder: false
+	});
+
+	/**
+	 * Emoji floating over the room right now: { id, userId, emoji }. Each
+	 * entry removes itself after REACTION_MS, like the phone app's ticker.
+	 */
+	const reactions = ref([]);
+	/** What this room lets people send, from join_channel. */
+	const reactionOptions = ref([]);
+
+	const REACTION_MS = 4000;
+	let reactionSeq = 0;
+	const reactionTimers = new Set();
+
+	function showReaction(userId, emoji) {
+		if (!emoji) {
+			return;
+		}
+
+		const id = ++reactionSeq;
+		// Latest wins per person, so a burst does not stack badges.
+		reactions.value = [...reactions.value.filter(r => r.userId !== userId), { id, userId, emoji }];
+
+		const timer = setTimeout(() => {
+			reactionTimers.delete(timer);
+			reactions.value = reactions.value.filter(r => r.id !== id);
+		}, REACTION_MS);
+		reactionTimers.add(timer);
+	}
+
+	/** The reaction to draw on this person's tile, if any. */
+	function reactionFor(userId) {
+		return reactions.value.find(r => r.userId === userId)?.emoji || null;
+	}
+
+	async function sendReaction(emoji) {
+		const info = channel.info;
+		if (!info || !emoji) {
+			return false;
+		}
+
+		try {
+			await call("sendChannelReaction", info.channel, emoji);
+			// Our own reaction comes back over PubNub too, but not always, and
+			// never instantly - showing it now is what makes the button feel
+			// like it did something. showReaction dedupes per person.
+			showReaction(info.user_profile_id, emoji);
+			return true;
+		} catch (err) {
+			chat.error = err.message;
+			return false;
+		}
+	}
 
 	let audio = null;
 	let events = null;
@@ -47,6 +108,7 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			message: raw.message ?? raw.text,
 			time_created: raw.time_created,
 			like_count: raw.like_count ?? 0,
+			viewer_has_liked: Boolean(raw.viewer_has_liked),
 			user_profile: raw.user_profile || {
 				user_id: raw.from_user_id,
 				name: raw.from_name,
@@ -61,6 +123,8 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		return result?.messages || result?.items || result?.chat_messages || [];
 	}
 
+	const byTime = (a, b) => (Date.parse(a.time_created) || 0) - (Date.parse(b.time_created) || 0);
+
 	/**
 	 * The conversation from before you walked in. Oldest first, since the API
 	 * may hand them back either way round and the panel reads downwards.
@@ -73,17 +137,82 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			// As times, not strings: the API sends offsets ('...-07:00'), and
 			// lexicographic order is only chronological while every stamp
 			// happens to share one.
-			history.sort((a, b) => (Date.parse(a.time_created) || 0) - (Date.parse(b.time_created) || 0));
+			history.sort(byTime);
 
 			for (const entry of history) {
 				addMessage(entry);
 			}
 
+			chat.nextCursor = result?.next_cursor || null;
+			chat.total = result?.num_messages ?? history.length;
 			chat.error = "";
 		} catch (err) {
 			// Not fatal - live messages still arrive over PubNub, so say what
 			// happened and carry on rather than emptying the panel.
 			chat.error = err.message;
+		}
+	}
+
+	/**
+	 * One more page of the past, on demand. The API pages newest-first, so a
+	 * continued cursor yields strictly older messages, which prepend.
+	 */
+	async function loadOlder() {
+		const name = channel.info?.channel;
+		if (!name || !chat.nextCursor || chat.loadingOlder) {
+			return false;
+		}
+
+		chat.loadingOlder = true;
+
+		try {
+			const result = await call("getChannelMessages", { channel: name, cursor: chat.nextCursor });
+			const seen = new Set(chat.messages.map(m => m.message_id).filter(Boolean));
+			const older = messagesFrom(result)
+				.map(chatEntry)
+				.filter(m => m.message_id && !seen.has(m.message_id));
+
+			older.sort(byTime);
+			// Deliberately not through addMessage: this is the past, so it
+			// goes before what is shown, and the newest-200 cap must not eat
+			// what was just fetched.
+			chat.messages.unshift(...older.map(m => ({ ...m, at: 0 })));
+
+			// A cursor that stopped yielding anything new is the end too -
+			// trusting it forever would let one repeated page loop.
+			chat.nextCursor = older.length ? result?.next_cursor || null : null;
+			return older.length > 0;
+		} catch (err) {
+			chat.error = err.message;
+			return false;
+		} finally {
+			chat.loadingOlder = false;
+		}
+	}
+
+	/**
+	 * Like or unlike one line of chat. Optimistic, because the round trip is
+	 * long enough to make a heart that lights up a second later feel broken.
+	 */
+	async function toggleMessageLike(message) {
+		const name = channel.info?.channel;
+		if (!name || !message?.message_id) {
+			return false;
+		}
+
+		const wanted = !message.viewer_has_liked;
+		message.viewer_has_liked = wanted;
+		message.like_count = Math.max(0, (message.like_count || 0) + (wanted ? 1 : -1));
+
+		try {
+			await call(wanted ? "likeChatMessage" : "unlikeChatMessage", name, message.message_id);
+			return true;
+		} catch (err) {
+			// Put it back the way it was; the server did not agree.
+			message.viewer_has_liked = !wanted;
+			message.like_count = Math.max(0, (message.like_count || 0) + (wanted ? -1 : 1));
+			chat.error = err.message;
+			return false;
 		}
 	}
 
@@ -307,6 +436,19 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			});
 
 			/**
+			 * Somebody reacting with an emoji. Found the same way as live chat:
+			 * it was arriving and being logged as unhandled. Field names are
+			 * taken defensively, since the payload shape is only known from
+			 * observation.
+			 */
+			events.on("new_channel_reaction", event => {
+				showReaction(
+					event.from_user_id ?? event.user_id ?? event.user_profile?.user_id,
+					event.reaction ?? event.emoji ?? event.reaction_emoji
+				);
+			});
+
+			/**
 			 * A moderator inviting you onto the stage. This was being dropped
 			 * silently, so raising a hand and being brought up looked exactly
 			 * like raising a hand and being ignored.
@@ -353,6 +495,12 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			chat.canPost = Boolean(info.user_capabilities?.can_post_to_chat);
 			chat.messages = [];
 			chat.error = "";
+			chat.nextCursor = null;
+			chat.total = 0;
+
+			// What this room lets people send. Two shapes seen in the wild.
+			reactionOptions.value =
+				info.emoji_reactions?.channel_reactions || info.emoji_reaction_options || [];
 
 			if (chat.enabled) {
 				// After subscribing, so anything said while this was in flight
@@ -384,6 +532,15 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		chat.enabled = false;
 		chat.canPost = false;
 		chat.error = "";
+		chat.nextCursor = null;
+		chat.total = 0;
+
+		for (const timer of reactionTimers) {
+			clearTimeout(timer);
+		}
+		reactionTimers.clear();
+		reactions.value = [];
+		reactionOptions.value = [];
 
 		const name = channel.info?.channel;
 
@@ -507,6 +664,11 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		join,
 		leave,
 		sendChat,
+		loadOlder,
+		toggleMessageLike,
+		reactionOptions,
+		reactionFor,
+		sendReaction,
 		acceptInvite,
 		declineInvite,
 		toggleMute,

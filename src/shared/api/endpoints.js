@@ -82,13 +82,35 @@ export const endpoints = {
 	 * it says "Channel is required." - the same way /send_channel_message named
 	 * its fields, and unlike /get_chat_messages, which rejects every shape tried
 	 * with an empty error_message and names nothing.
+	 *
+	 * Newest first, and paginated: the response carries next_cursor and
+	 * num_messages, and passing the cursor back continues into older messages.
 	 */
-	getChannelMessages: (c, { channel } = {}) =>
-		c.request("/get_channel_messages", { query: { channel } }),
+	getChannelMessages: (c, { channel, cursor } = {}) =>
+		c.request("/get_channel_messages", { query: { channel, cursor } }),
 
 	/** `{ channel, message }` - the API named `message` itself, on a 400. */
 	sendChatMessage: (c, { channel, message } = {}) =>
 		c.request("/send_channel_message", { body: { channel, message } }),
+
+	/**
+	 * An emoji over the room. The endpoint named `channel` on a 400; the
+	 * PubNub event it produces is `new_channel_reaction`. join_channel's
+	 * emoji_reactions.channel_reactions lists what may be sent.
+	 */
+	sendChannelReaction: (c, channel, reaction) =>
+		c.request("/send_channel_reaction", { body: { channel, reaction } }),
+
+	/**
+	 * Liking one chat message. Both named `channel` on a 400; history rows
+	 * carry viewer_has_liked, and other people's likes arrive as
+	 * channel_message_like_count_update.
+	 */
+	likeChatMessage: (c, channel, messageId) =>
+		c.request("/like_channel_message", { body: { channel, message_id: messageId } }),
+
+	unlikeChatMessage: (c, channel, messageId) =>
+		c.request("/unlike_channel_message", { body: { channel, message_id: messageId } }),
 
 	joinChannel: (c, channel) =>
 		c.request("/join_channel", {

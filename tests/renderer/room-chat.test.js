@@ -396,3 +396,164 @@ describe("chat message likes", () => {
 		).not.toThrow();
 	});
 });
+
+describe("liking a message yourself", () => {
+	function withHistory(rows) {
+		bridge.api.getChannelMessages = vi.fn().mockResolvedValue({
+			ok: true,
+			data: { messages: rows }
+		});
+	}
+
+	it("lights up at once, then tells the server", async () => {
+		withHistory([{ message_id: "m1", message: "hi", like_count: 2, viewer_has_liked: false }]);
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+
+		const message = room.chat.messages[0];
+		await expect(room.toggleMessageLike(message)).resolves.toBe(true);
+
+		expect(message.viewer_has_liked).toBe(true);
+		expect(message.like_count).toBe(3);
+		expect(bridge.api.likeChatMessage).toHaveBeenCalledWith("PAKBKoJ7", "m1");
+	});
+
+	it("unlikes what was already liked", async () => {
+		withHistory([{ message_id: "m1", message: "hi", like_count: 2, viewer_has_liked: true }]);
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+
+		const message = room.chat.messages[0];
+		await room.toggleMessageLike(message);
+
+		expect(message.viewer_has_liked).toBe(false);
+		expect(message.like_count).toBe(1);
+		expect(bridge.api.unlikeChatMessage).toHaveBeenCalledWith("PAKBKoJ7", "m1");
+	});
+
+	it("puts the heart back when the server refuses", async () => {
+		withHistory([{ message_id: "m1", message: "hi", like_count: 0, viewer_has_liked: false }]);
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+
+		bridge.api.likeChatMessage = vi
+			.fn()
+			.mockResolvedValue({ ok: false, error: { message: "Nope", status: 400 } });
+
+		const message = room.chat.messages[0];
+		await expect(room.toggleMessageLike(message)).resolves.toBe(false);
+
+		expect(message.viewer_has_liked).toBe(false);
+		expect(message.like_count).toBe(0);
+	});
+
+	it("cannot like a pending message that has no id yet", async () => {
+		withHistory([]);
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+
+		await expect(room.toggleMessageLike({ message: "unsent" })).resolves.toBe(false);
+		expect(bridge.api.likeChatMessage).not.toHaveBeenCalled();
+	});
+});
+
+describe("paging into the past", () => {
+	const row = (id, time, text) => ({
+		message_id: id,
+		message: text,
+		time_created: time,
+		like_count: 0
+	});
+
+	it("prepends older messages and keeps reading order", async () => {
+		bridge.api.getChannelMessages = vi.fn().mockResolvedValue({
+			ok: true,
+			data: {
+				messages: [row("m3", "2026-08-04T15:03:00-07:00", "newest")],
+				next_cursor: "CUR1",
+				num_messages: 3
+			}
+		});
+
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+		expect(room.chat.nextCursor).toBe("CUR1");
+		expect(room.chat.total).toBe(3);
+
+		bridge.api.getChannelMessages = vi.fn().mockResolvedValue({
+			ok: true,
+			data: {
+				messages: [
+					row("m2", "2026-08-04T15:02:00-07:00", "middle"),
+					row("m1", "2026-08-04T15:01:00-07:00", "oldest")
+				],
+				next_cursor: "CUR2"
+			}
+		});
+
+		await expect(room.loadOlder()).resolves.toBe(true);
+
+		expect(bridge.api.getChannelMessages).toHaveBeenCalledWith({ channel: "PAKBKoJ7", cursor: "CUR1" });
+		expect(room.chat.messages.map(m => m.message)).toEqual(["oldest", "middle", "newest"]);
+		expect(room.chat.nextCursor).toBe("CUR2");
+	});
+
+	it("stops when a page brings nothing new", async () => {
+		// A cursor that repeats its page would otherwise loop forever.
+		bridge.api.getChannelMessages = vi.fn().mockResolvedValue({
+			ok: true,
+			data: {
+				messages: [row("m1", "2026-08-04T15:01:00-07:00", "only")],
+				next_cursor: "CUR1"
+			}
+		});
+
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+
+		await expect(room.loadOlder()).resolves.toBe(false);
+		expect(room.chat.nextCursor).toBeNull();
+	});
+
+	it("does nothing without a cursor", async () => {
+		bridge.api.getChannelMessages = vi.fn().mockResolvedValue({
+			ok: true,
+			data: { messages: [] }
+		});
+
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+		bridge.api.getChannelMessages.mockClear();
+
+		await expect(room.loadOlder()).resolves.toBe(false);
+		expect(bridge.api.getChannelMessages).not.toHaveBeenCalled();
+	});
+
+	it("old pages are exempt from the newest-200 cap", async () => {
+		// The cap protects against a long room's live growth; eating the page
+		// that was just fetched would make scrolling up a no-op.
+		const live = Array.from({ length: 200 }, (_, i) =>
+			row(`live${i}`, `2026-08-04T16:${String(i % 60).padStart(2, "0")}:00-07:00`, `live ${i}`)
+		);
+		bridge.api.getChannelMessages = vi.fn().mockResolvedValue({
+			ok: true,
+			data: { messages: live, next_cursor: "CUR1", num_messages: 400 }
+		});
+
+		const room = makeRoom();
+		await room.join("PAKBKoJ7", { userId: ME });
+		expect(room.chat.messages).toHaveLength(200);
+
+		bridge.api.getChannelMessages = vi.fn().mockResolvedValue({
+			ok: true,
+			data: {
+				messages: [row("old1", "2026-08-04T15:00:00-07:00", "from the past")],
+				next_cursor: null
+			}
+		});
+
+		await room.loadOlder();
+		expect(room.chat.messages).toHaveLength(201);
+		expect(room.chat.messages[0].message).toBe("from the past");
+	});
+});

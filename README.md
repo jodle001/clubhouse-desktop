@@ -157,8 +157,16 @@ routed at all.
 | discovery/explore/search-channels (14 names tried) | all gone |
 | `POST /get_blocked_users` | alive |
 | `POST /send_channel_message` | alive - `{ channel, message }` |
-| `GET /get_channel_messages` | alive - chat history, `?channel=` |
+| `GET /get_channel_messages` | alive - chat history, `?channel=`, paginated by `cursor` |
 | `GET /get_chat_messages` | exists, but rejects everything tried |
+| `POST /send_channel_reaction` | alive - emoji over the room |
+| `POST /like_channel_message`, `/unlike_channel_message` | alive - `{ channel, message_id }` |
+| `POST /get_conversations` | alive - DM list, `{ conversations, next_cursor }` |
+| `POST /get_conversation` | alive - wants `conversation_id` |
+| `POST /create_conversation` | version-gated: "please upgrade your app" |
+| `POST /send_wave` | alive |
+| `POST /get_channel_user_poll` | alive - `{ channel }` |
+| `POST /create_channel_user_poll` | alive, wants parameters |
 
 Two conclusions from the 2026-08 probe worth stating plainly. There is no
 public room directory: every discovery, explore, trending and search-channels
