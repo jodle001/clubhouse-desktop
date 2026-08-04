@@ -97,13 +97,17 @@ export const endpoints = {
 		c.request("/send_channel_message", { body: { channel, message } }),
 
 	/**
-	 * An emoji over the room. The endpoint named both its fields on 400s:
-	 * `channel`, then - when sent an emoji under `reaction` - "Reaction id is
-	 * required." The ids live in join_channel's `reactions.channel_reactions`
-	 * objects, the id-bearing twin of the emoji_reactions string list.
+	 * An emoji over somebody's tile. The endpoint named all three fields, one
+	 * 400 at a time: `channel`, then "Reaction id is required." (the ids live
+	 * in join_channel's `reactions.channel_reactions` objects - shape
+	 * { id, sort_priority, emoji }), then "Target user id is required." - a
+	 * reaction lands on a person, and reacting to the room at large means
+	 * targeting yourself, which is where the phone app draws your own.
 	 */
-	sendChannelReaction: (c, channel, reactionId) =>
-		c.request("/send_channel_reaction", { body: { channel, reaction_id: reactionId } }),
+	sendChannelReaction: (c, channel, reactionId, targetUserId) =>
+		c.request("/send_channel_reaction", {
+			body: { channel, reaction_id: reactionId, target_user_id: targetUserId }
+		}),
 
 	/**
 	 * Liking one chat message. Both named `channel` on a 400; history rows

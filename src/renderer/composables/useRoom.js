@@ -46,6 +46,7 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 
 	const REACTION_MS = 4000;
 	let reactionSeq = 0;
+	let loggedReactionEvent = false;
 	const reactionTimers = new Set();
 
 	function showReaction(userId, emoji) {
@@ -69,21 +70,27 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		return reactions.value.find(r => r.userId === userId)?.emoji || null;
 	}
 
-	async function sendReaction(option) {
+	/**
+	 * React with an emoji, onto somebody's tile - your own unless a target is
+	 * given, which is where the phone app draws a plain reaction.
+	 */
+	async function sendReaction(option, targetUserId = null) {
 		const info = channel.info;
 		if (!info || !option) {
 			return false;
 		}
 
+		const target = targetUserId ?? info.user_profile_id;
+
 		try {
 			// The id when the room supplied one; the emoji as a last resort, so
 			// a shape this parser has not met still produces a server error
 			// that names what it wanted rather than a dead button.
-			await call("sendChannelReaction", info.channel, option.id ?? option.emoji);
-			// Our own reaction comes back over PubNub too, but not always, and
-			// never instantly - showing it now is what makes the button feel
-			// like it did something. showReaction dedupes per person.
-			showReaction(info.user_profile_id, option.emoji);
+			await call("sendChannelReaction", info.channel, option.id ?? option.emoji, target);
+			// The PubNub echo is neither guaranteed nor instant - showing it
+			// now is what makes the button feel like it did something.
+			// showReaction dedupes per person.
+			showReaction(target, option.emoji);
 			return true;
 		} catch (err) {
 			chat.error = err.message;
@@ -467,13 +474,24 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 
 			/**
 			 * Somebody reacting with an emoji. Found the same way as live chat:
-			 * it was arriving and being logged as unhandled. Field names are
-			 * taken defensively, since the payload shape is only known from
-			 * observation.
+			 * it was arriving and being logged as unhandled. Sending one takes
+			 * a target_user_id, so the event should name a target too - drawn
+			 * on the target's tile when present, the sender's otherwise. Field
+			 * names are taken defensively and the raw event is logged once per
+			 * shape, since the payload is only known from observation.
 			 */
 			events.on("new_channel_reaction", event => {
+				if (!loggedReactionEvent) {
+					loggedReactionEvent = true;
+					console.log("[room] reaction event shape:", JSON.stringify(event).slice(0, 300));
+				}
+
 				showReaction(
-					event.from_user_id ?? event.user_id ?? event.user_profile?.user_id,
+					event.target_user_id ??
+						event.target_user_profile?.user_id ??
+						event.from_user_id ??
+						event.user_id ??
+						event.user_profile?.user_id,
 					event.reaction ?? event.emoji ?? event.reaction_emoji
 				);
 			});

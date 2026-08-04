@@ -112,18 +112,48 @@ describe("emoji over the room", () => {
 		expect(room.reactionFor(5)).toBe("😂");
 	});
 
-	it("sends the id, not the emoji, and shows your own immediately", async () => {
-		// "Reaction id is required." is what sending the emoji got. The echo
-		// over PubNub is neither guaranteed nor instant; a reaction button
-		// that does nothing visible feels broken even when it worked.
+	it("sends id and target - yourself by default - and shows it at once", async () => {
+		// The server named its fields one 400 at a time: "Reaction id is
+		// required.", then "Target user id is required." A plain reaction
+		// targets your own tile, which is where the phone app draws it. The
+		// PubNub echo is neither guaranteed nor instant; a button that does
+		// nothing visible feels broken even when it worked.
 		joinWith();
 		const room = makeRoom();
 		await room.join("C1", { userId: 9 });
 
 		await expect(room.sendReaction(room.reactionOptions.value[0])).resolves.toBe(true);
 
-		expect(bridge.api.sendChannelReaction).toHaveBeenCalledWith("C1", 101);
+		expect(bridge.api.sendChannelReaction).toHaveBeenCalledWith("C1", 101, 9);
 		expect(room.reactionFor(9)).toBe("❤");
+	});
+
+	it("can aim a reaction at somebody else's tile", async () => {
+		joinWith();
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		await room.sendReaction(room.reactionOptions.value[2], 5);
+
+		expect(bridge.api.sendChannelReaction).toHaveBeenCalledWith("C1", 103, 5);
+		expect(room.reactionFor(5)).toBe("🔥");
+		expect(room.reactionFor(9)).toBeNull();
+	});
+
+	it("draws an incoming reaction on its target, not its sender", async () => {
+		joinWith();
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		room._events.deliver({
+			action: "new_channel_reaction",
+			from_user_id: 5,
+			target_user_id: 9,
+			reaction: "👏"
+		});
+
+		expect(room.reactionFor(9)).toBe("👏");
+		expect(room.reactionFor(5)).toBeNull();
 	});
 
 	it("falls back to the emoji when no id is known", async () => {
@@ -134,7 +164,7 @@ describe("emoji over the room", () => {
 		await room.join("C1", { userId: 9 });
 
 		await room.sendReaction(room.reactionOptions.value[0]);
-		expect(bridge.api.sendChannelReaction).toHaveBeenCalledWith("C1", "❤");
+		expect(bridge.api.sendChannelReaction).toHaveBeenCalledWith("C1", "❤", 9);
 	});
 
 	it("reports a refused reaction instead of pretending", async () => {
