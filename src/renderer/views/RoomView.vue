@@ -36,19 +36,24 @@ async function exit() {
 const viewing = ref(null);
 
 /**
- * Why the microphone is or is not available. Two different reasons look
- * identical on a greyed-out button, so the tooltip says which one applies.
+ * The microphone button says what it actually is. Three states look identical
+ * greyed out, and calling all of them "Muted" claims a mute you could undo -
+ * when the truth is that audio is switched off, or that you are not on stage.
  */
-const micReason = computed(() => {
+const mic = computed(() => {
 	if (!state.settings.audioEnabled) {
-		return { enabled: false, why: "Audio is disabled in Settings" };
+		return { enabled: false, label: "🔇 Audio off", why: "Enable audio in Settings" };
 	}
 
 	if (!room.isSpeaker.value) {
-		return { enabled: false, why: "Only speakers can unmute — raise your hand to be invited up" };
+		return {
+			enabled: false,
+			label: "👂 Listening",
+			why: "Only speakers can unmute — raise your hand to be invited up"
+		};
 	}
 
-	return { enabled: true, why: "" };
+	return { enabled: true, label: room.muted.value ? "🔇 Muted" : "🎙️ Live", why: "" };
 });
 
 const draft = ref("");
@@ -198,13 +203,18 @@ async function send() {
 				<footer class="room__bar">
 					<button
 						class="btn btn-secondary"
-						:disabled="!micReason.enabled"
-						:title="micReason.why"
+						:disabled="!mic.enabled"
+						:title="mic.why"
 						@click="room.toggleMute()"
 					>
-						{{ room.muted.value ? "🔇 Muted" : "🎙️ Live" }}
+						{{ mic.label }}
 					</button>
-					<button class="btn btn-secondary" @click="room.toggleHand()">
+
+					<!--
+						Asking to speak when you are already speaking is not a
+						thing you can want, and the phone app does not offer it.
+					-->
+					<button v-if="!room.isSpeaker.value" class="btn btn-secondary" @click="room.toggleHand()">
 						{{ room.handRaised.value ? "✋ Hand raised" : "✋ Raise hand" }}
 					</button>
 

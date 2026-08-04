@@ -138,17 +138,18 @@ describe("RoomView chat panel", () => {
 describe("the microphone button", () => {
 	const micButton = wrapper => wrapper.findAll(".room__bar button")[0];
 
-	it("says which of the two reasons it is greyed out for", async () => {
-		// "Audio off in Settings" and "you are not a speaker" look identical on
-		// a disabled button, so the title has to distinguish them.
+	it("says audio is off rather than claiming a mute you could undo", async () => {
 		const wrapper = mountRoom();
 		await settle(wrapper);
 
 		expect(micButton(wrapper).attributes("disabled")).toBeDefined();
+		expect(micButton(wrapper).text()).toContain("Audio off");
 		expect(micButton(wrapper).attributes("title")).toMatch(/Settings/);
 	});
 
-	it("stays disabled for a listener even with audio on", async () => {
+	it("says listening for somebody who is not on stage", async () => {
+		// A listener is not muted, and calling it that suggests a button that
+		// would unmute if you pressed it.
 		sessionState.settings = { audioEnabled: true };
 		bridge.api.joinChannel = vi.fn().mockResolvedValue({
 			ok: true,
@@ -159,16 +160,43 @@ describe("the microphone button", () => {
 		await settle(wrapper);
 
 		expect(micButton(wrapper).attributes("disabled")).toBeDefined();
+		expect(micButton(wrapper).text()).toContain("Listening");
 		expect(micButton(wrapper).attributes("title")).toMatch(/speakers/i);
 	});
 
-	it("works for a speaker with audio on", async () => {
+	it("works, and says Muted, for a speaker with audio on", async () => {
 		sessionState.settings = { audioEnabled: true };
 
 		const wrapper = mountRoom();
 		await settle(wrapper);
 
 		expect(micButton(wrapper).attributes("disabled")).toBeUndefined();
+		expect(micButton(wrapper).text()).toContain("Muted");
+	});
+});
+
+describe("raising a hand", () => {
+	const barText = wrapper => wrapper.find(".room__bar").text();
+
+	it("is not offered to somebody already speaking", async () => {
+		// joinResult puts you on stage, which is what happens when you were
+		// already in the room on the phone.
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		expect(barText(wrapper)).not.toMatch(/Raise hand/);
+	});
+
+	it("is offered to a listener", async () => {
+		bridge.api.joinChannel = vi.fn().mockResolvedValue({
+			ok: true,
+			data: joinResult({ users: [{ user_id: 7, name: "Me", is_speaker: false }] })
+		});
+
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		expect(barText(wrapper)).toMatch(/Raise hand/);
 	});
 });
 

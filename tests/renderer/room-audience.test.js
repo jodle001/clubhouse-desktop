@@ -370,6 +370,21 @@ describe("the audio role follows the stage", () => {
 		expect(roleCalls()).toContain("host");
 	});
 
+	it("lowers a raised hand when a moderator brings you up directly", async () => {
+		joinWith([person(9)]);
+		const room = makeRoomWithAudio();
+		await room.join("C1", { userId: 9 });
+
+		bridge.api.raiseHand = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+		await room.toggleHand();
+		expect(room.handRaised.value).toBe(true);
+
+		room._events.deliver({ action: "add_speaker", channel: "C1", user_id: 9 });
+		await new Promise(resolve => setTimeout(resolve, 0));
+
+		expect(room.handRaised.value).toBe(false);
+	});
+
 	it("ignores somebody else being added", async () => {
 		joinWith([person(9), person(5)]);
 		const room = makeRoomWithAudio();

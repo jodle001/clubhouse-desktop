@@ -254,6 +254,8 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 				if (message.user_id === info.user_profile_id) {
 					await audio?.setRole("host");
 					invite.value = null;
+					// You are up; the hand has served its purpose.
+					handRaised.value = false;
 				}
 			});
 

@@ -122,6 +122,19 @@ const CANDIDATES = [
 	{ path: "/speaker_invite_response", method: "POST", body: {} },
 	{ path: "/audience_reply", method: "POST", body: {} },
 
+	// --- leaving the stage ------------------------------------------------
+	// The inverse of /become_speaker. A moderator has /uninvite_speaker for
+	// somebody else; what a speaker uses on themselves is unknown. Empty
+	// bodies, so none of these can take anybody off stage by asking.
+	{ path: "/leave_speaker", method: "POST", body: {} },
+	{ path: "/become_audience", method: "POST", body: {} },
+	{ path: "/become_listener", method: "POST", body: {} },
+	{ path: "/move_to_audience", method: "POST", body: {} },
+	{ path: "/leave_stage", method: "POST", body: {} },
+	{ path: "/step_down", method: "POST", body: {} },
+	{ path: "/remove_speaker", method: "POST", body: {} },
+	{ path: "/uninvite_speaker", method: "POST", body: {} },
+
 	// --- blocking and reporting -----------------------------------------
 	// /me already reports blocked_ids, so the state is known; what is missing
 	// is how to change it. Sent empty, so nobody is blocked by asking.
