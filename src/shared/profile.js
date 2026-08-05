@@ -39,7 +39,16 @@ export const IDENTITIES = Object.freeze({
 	"clubdeck-ua": { userAgent: "clubhouse/android/2576", appVersion: "0.1.8", appBuild: "2576" },
 
 	// A later Android identity, as used by clubhouse-py.
-	android: { userAgent: "clubhouse/android/3389", appVersion: "1.0.1", appBuild: "3389" }
+	android: { userAgent: "clubhouse/android/3389", appVersion: "1.0.1", appBuild: "3389" },
+
+	// The build the live server actually asks for, from /check_for_update
+	// (npm run doctor) on 2026-08-05: version 23.08.31, build 1026421. This is
+	// the identity to use for anything the 2021 builds are too old for -
+	// reactions and DMs both answer "Feature flag is not enabled" / "please
+	// upgrade your app" under Clubdeck's 2576. Still Android, so no iOS
+	// attestation; the trade is that a current build may expect request shapes
+	// this client does not yet send.
+	"android-current": { userAgent: "clubhouse/android/1026421", appVersion: "23.08.31", appBuild: "1026421" }
 });
 
 export const DEFAULT_IDENTITY = "clubdeck";

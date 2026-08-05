@@ -9,7 +9,7 @@
  */
 
 import { createRequire } from "node:module";
-import { API_ROOT, APP_IDENTITY, buildHeaders, newDeviceId } from "../src/shared/profile.js";
+import { API_ROOT, APP_IDENTITY, buildHeaders, IDENTITIES, newDeviceId } from "../src/shared/profile.js";
 import { nodeTransport } from "../src/main/transport.js";
 
 const require = createRequire(import.meta.url);
@@ -80,6 +80,20 @@ if (response.ok && parsed.has_update === false) {
 } else if (parsed.has_update) {
 	console.log(`The API wants build ${parsed.app_build} (${parsed.app_version}).`);
 	console.log(`This client sends ${APP_IDENTITY.appBuild}. See src/shared/profile.js.`);
+
+	// An older build is fine for browsing and sign-in - has_update is not a
+	// failure - but it is what gates reactions and DMs. If a named identity
+	// already matches what the server wants, name it; otherwise give the knob.
+	const match = Object.entries(IDENTITIES).find(([, id]) => id.appBuild === String(parsed.app_build));
+	console.log("\nOlder builds still browse and sign in; newer features are gated on this.");
+	if (match) {
+		console.log(`To claim it: CLUBHOUSE_IDENTITY=${match[0]} npm start`);
+	} else {
+		console.log(
+			`To claim it: CLUBHOUSE_APP_VERSION="${parsed.app_version}" ` +
+				`CLUBHOUSE_APP_BUILD=${parsed.app_build} npm start`
+		);
+	}
 	process.exitCode = 1;
 } else {
 	console.log(`Unexpected reply (HTTP ${response.status}).`);

@@ -29,6 +29,15 @@ describe("app identity", () => {
 		});
 	});
 
+	it("offers the build the live server actually asks for", () => {
+		// From /check_for_update - the identity to reach for when a feature is
+		// gated on a newer build than the 2021 sets carry.
+		expect(resolveIdentity("android-current")).toMatchObject({
+			appVersion: "23.08.31",
+			appBuild: "1026421"
+		});
+	});
+
 	it("falls back to the default rather than sending nothing", () => {
 		expect(resolveIdentity("nonsense")).toEqual(resolveIdentity("clubdeck"));
 		expect(resolveIdentity(undefined).appBuild).toBe("2576");
