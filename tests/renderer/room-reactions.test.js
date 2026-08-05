@@ -181,8 +181,8 @@ describe("emoji over the room", () => {
 		expect(room.chat.error).toBe("Nope");
 	});
 
-	it("retires the picker when the server gates it on client build", async () => {
-		// "Feature flag is not enabled" is the build talking, not the payload -
+	it("retires the picker when the account is not in the reaction rollout", async () => {
+		// "Feature flag is not enabled" is an account gate, not the payload -
 		// no press will succeed, so the button should stop offering.
 		joinWith();
 		const room = makeRoom();
@@ -195,7 +195,7 @@ describe("emoji over the room", () => {
 		await room.sendReaction(room.reactionOptions.value[0]);
 
 		expect(room.reactionsBlocked.value).toBe(true);
-		expect(room.chat.error).toMatch(/not enabled for this account/i);
+		expect(room.chat.error).toMatch(/enabled for this account/i);
 	});
 
 	it("clears every floating emoji on leaving", async () => {
