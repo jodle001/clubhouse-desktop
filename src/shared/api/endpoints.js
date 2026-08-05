@@ -30,6 +30,19 @@ export const endpoints = {
 
 	getProfile: (c, userId) => c.request("/get_profile", { body: { user_id: userId } }),
 
+	// --- conversations ------------------------------------------------
+	/**
+	 * The modern "Chats" feed: async voice/text threads, not 1:1 DMs. Answers
+	 * { success, conversations, next_cursor }, each conversation carrying a
+	 * title, an AI summary, a creator, a preview and a has_new_segments flag.
+	 * Ungated, unlike creating one, which answers "please upgrade your app".
+	 */
+	getConversations: (c, { cursor } = {}) => c.request("/get_conversations", { body: { cursor } }),
+
+	/** One thread's detail. Named `conversation_id` itself, on a 400. */
+	getConversation: (c, conversationId) =>
+		c.request("/get_conversation", { body: { conversation_id: conversationId } }),
+
 	updateName: (c, name) => c.request("/update_name", { body: { name } }),
 
 	updateUsername: (c, username) => c.request("/update_username", { body: { username } }),

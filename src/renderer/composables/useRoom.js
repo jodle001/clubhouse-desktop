@@ -497,12 +497,15 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			events.on("new_channel_reaction", event => {
 				if (!loggedReactionEvent) {
 					loggedReactionEvent = true;
-					console.log("[room] reaction event shape:", JSON.stringify(event).slice(0, 300));
+					console.log("[room] reaction event shape:", JSON.stringify(event).slice(0, 600));
 				}
 
+				// The reactor is action_user_profile.id - the one field the live
+				// event actually carries, found by logging it. The rest are kept
+				// as fallbacks against a shape that changes under us.
 				showReaction(
-					event.target_user_id ??
-						event.target_user_profile?.user_id ??
+					event.action_user_profile?.id ??
+						event.target_user_id ??
 						event.from_user_id ??
 						event.user_id ??
 						event.user_profile?.user_id,

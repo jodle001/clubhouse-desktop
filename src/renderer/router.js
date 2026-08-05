@@ -7,6 +7,13 @@ const routes = [
 	{ path: "/waitlist", name: "waitlist", component: () => import("./views/WaitlistView.vue") },
 	{ path: "/home", name: "home", component: () => import("./views/HomeView.vue") },
 	{ path: "/people", name: "people", component: () => import("./views/PeopleView.vue") },
+	{ path: "/chats", name: "conversations", component: () => import("./views/ConversationsView.vue") },
+	{
+		path: "/chats/:id",
+		name: "conversation",
+		component: () => import("./views/ConversationView.vue"),
+		props: true
+	},
 	{ path: "/room/:channel", name: "room", component: () => import("./views/RoomView.vue"), props: true },
 	{ path: "/me", name: "me", component: () => import("./views/ProfileView.vue"), props: () => ({ id: "me" }) },
 	{ path: "/user/:id", name: "user", component: () => import("./views/ProfileView.vue"), props: true },

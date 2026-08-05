@@ -183,8 +183,8 @@ routed at all.
 | `GET /get_chat_messages` | exists, but rejects everything tried |
 | `POST /send_channel_reaction` | alive - emoji over the room |
 | `POST /like_channel_message`, `/unlike_channel_message` | alive - `{ channel, message_id }` |
-| `POST /get_conversations` | alive - DM list, `{ conversations, next_cursor }` |
-| `POST /get_conversation` | alive - wants `conversation_id` |
+| `POST /get_conversations` | alive - the Chats feed, `{ conversations, next_cursor }` |
+| `POST /get_conversation` | alive - one thread, `{ conversation_id }` |
 | `POST /create_conversation` | version-gated: "please upgrade your app" |
 | `POST /send_wave` | alive |
 | `POST /get_channel_user_poll` | alive - `{ channel }` |
