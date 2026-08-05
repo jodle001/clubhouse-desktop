@@ -95,12 +95,15 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			showReaction(target, option.emoji);
 			return true;
 		} catch (err) {
-			// The endpoint is gated on client build: a 2021 identity gets
-			// "Feature flag is not enabled" no matter the payload. Say so
-			// plainly, and remember it, so the picker stops offering something
-			// this build cannot do rather than failing on every press.
+			// "Feature flag is not enabled" is an account gate, not a payload
+			// or build problem: it fails identically on the 2021 build and on
+			// the current one the server demands, as speaker and as listener.
+			// The account is on the off side of the reaction rollout
+			// (auto-exp-new-listener-reaction-u-i: disabled in /me), which no
+			// header can change. Say so, and retire the picker for this room
+			// rather than failing on every press.
 			if (/feature flag/i.test(err.message)) {
-				chat.error = "Reactions need a newer client build than this one claims.";
+				chat.error = "Reactions aren't enabled for this account yet.";
 				reactionsBlocked.value = true;
 			} else {
 				chat.error = err.message;

@@ -111,17 +111,27 @@ uses a different delivery path (`/call_phone_number_auth`), so it is worth
 trying — if the call arrives when the text does not, the account and the
 request are fine and only SMS delivery is being dropped.
 
-The claimed app version matters beyond sign-in: the server gates features by
-client build. A 2021 build asking to send a reaction gets `Feature flag is not
-enabled`, and `/create_conversation` answers "please upgrade your app".
-`npm run doctor` prints the build the server currently wants, and
+The claimed app version matters beyond sign-in. `npm run doctor` prints the
+build the server currently wants — 2026-08 it is `1026421` (23.08.31), carried
+by the `android-current` identity — and
 
 ```sh
-CLUBHOUSE_APP_VERSION=x.y.z CLUBHOUSE_APP_BUILD=nnnn npm start -- --verbose
+CLUBHOUSE_IDENTITY=android-current npm start -- --verbose
 ```
 
-claims it without a code change. Note the trade-off: the newer the claimed
-build, the more the server may expect behaviours this client does not have.
+claims it. Verified end to end: sign-in survives the swap, and the feed, rooms,
+chat and history all work on the current build exactly as on 2576. The server
+flags 2576 as a *mandatory* update (`is_mandatory: true`), so `android-current`
+is the safer place to be — it is opt-in only because 2576 is the build known to
+deliver a fresh sign-in code, and that path is untested on the newer one.
+
+**Not everything gated is gated on the build, though.** Room reactions answer
+`Feature flag is not enabled` on *both* builds, as speaker and as listener — the
+gate is a per-account server experiment (`auto-exp-new-listener-reaction-u-i` in
+`/me`), on the off side of the rollout for this account, which no header can
+flip. `/create_conversation`'s "please upgrade your app" may be the same kind of
+account gate rather than a build one. So a newer build is worth claiming for
+what it *is* mandatory for, but it is not a key to feature flags.
 
 Requesting codes repeatedly makes this worse, not better; Clubhouse throttles
 by number. Leave twenty minutes between rounds of testing.
