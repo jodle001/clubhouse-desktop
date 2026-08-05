@@ -277,7 +277,7 @@ async function send() {
 						{{ room.handRaised.value ? "✋ Hand raised" : "✋ Raise hand" }}
 					</button>
 
-					<div v-if="room.reactionOptions.value.length" class="room__react">
+					<div v-if="room.reactionOptions.value.length && !room.reactionsBlocked.value" class="room__react">
 						<button
 							class="btn btn-secondary"
 							:aria-expanded="picking"

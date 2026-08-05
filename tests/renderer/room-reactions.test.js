@@ -181,6 +181,23 @@ describe("emoji over the room", () => {
 		expect(room.chat.error).toBe("Nope");
 	});
 
+	it("retires the picker when the server gates it on client build", async () => {
+		// "Feature flag is not enabled" is the build talking, not the payload -
+		// no press will succeed, so the button should stop offering.
+		joinWith();
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		bridge.api.sendChannelReaction = vi
+			.fn()
+			.mockResolvedValue({ ok: false, error: { message: "Feature flag is not enabled", status: 400 } });
+
+		await room.sendReaction(room.reactionOptions.value[0]);
+
+		expect(room.reactionsBlocked.value).toBe(true);
+		expect(room.chat.error).toMatch(/newer client build/i);
+	});
+
 	it("clears every floating emoji on leaving", async () => {
 		joinWith();
 		const room = makeRoom();

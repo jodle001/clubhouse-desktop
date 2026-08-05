@@ -34,6 +34,28 @@ describe("app identity", () => {
 		expect(resolveIdentity(undefined).appBuild).toBe("2576");
 	});
 
+	it("lets the version and build be overridden without a code change", () => {
+		// The server gates features by client build ("Feature flag is not
+		// enabled"), and /check_for_update names the one it wants - so trying
+		// it must be a restart, not an edit.
+		const identity = resolveIdentity("android", {
+			CLUBHOUSE_APP_VERSION: "25.08.01",
+			CLUBHOUSE_APP_BUILD: "9999"
+		});
+
+		expect(identity.appVersion).toBe("25.08.01");
+		expect(identity.appBuild).toBe("9999");
+		// The android agent embeds the build; the two must not contradict.
+		expect(identity.userAgent).toBe("clubhouse/android/9999");
+	});
+
+	it("does not rewrite an agent that never embedded a build", () => {
+		const identity = resolveIdentity("clubdeck", { CLUBHOUSE_APP_BUILD: "9999" });
+
+		expect(identity.appBuild).toBe("9999");
+		expect(identity.userAgent).toBe("clubhouse/android");
+	});
+
 	it("never offers an iOS identity, whichever is picked", () => {
 		for (const identity of Object.values(IDENTITIES)) {
 			expect(identity.userAgent).not.toMatch(/iPhone|iOS/i);

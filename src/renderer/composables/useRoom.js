@@ -43,6 +43,8 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 	const reactions = ref([]);
 	/** What this room lets people send, from join_channel. */
 	const reactionOptions = ref([]);
+	/** Set once the server refuses on a feature flag, so the picker retires. */
+	const reactionsBlocked = ref(false);
 
 	const REACTION_MS = 4000;
 	let reactionSeq = 0;
@@ -93,7 +95,16 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			showReaction(target, option.emoji);
 			return true;
 		} catch (err) {
-			chat.error = err.message;
+			// The endpoint is gated on client build: a 2021 identity gets
+			// "Feature flag is not enabled" no matter the payload. Say so
+			// plainly, and remember it, so the picker stops offering something
+			// this build cannot do rather than failing on every press.
+			if (/feature flag/i.test(err.message)) {
+				chat.error = "Reactions need a newer client build than this one claims.";
+				reactionsBlocked.value = true;
+			} else {
+				chat.error = err.message;
+			}
 			return false;
 		}
 	}
@@ -587,6 +598,8 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		reactionTimers.clear();
 		reactions.value = [];
 		reactionOptions.value = [];
+		reactionsBlocked.value = false;
+		loggedReactionEvent = false;
 
 		const name = channel.info?.channel;
 
@@ -713,6 +726,7 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		loadOlder,
 		toggleMessageLike,
 		reactionOptions,
+		reactionsBlocked,
 		reactionFor,
 		sendReaction,
 		acceptInvite,

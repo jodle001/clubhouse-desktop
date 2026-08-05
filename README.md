@@ -111,6 +111,18 @@ uses a different delivery path (`/call_phone_number_auth`), so it is worth
 trying — if the call arrives when the text does not, the account and the
 request are fine and only SMS delivery is being dropped.
 
+The claimed app version matters beyond sign-in: the server gates features by
+client build. A 2021 build asking to send a reaction gets `Feature flag is not
+enabled`, and `/create_conversation` answers "please upgrade your app".
+`npm run doctor` prints the build the server currently wants, and
+
+```sh
+CLUBHOUSE_APP_VERSION=x.y.z CLUBHOUSE_APP_BUILD=nnnn npm start -- --verbose
+```
+
+claims it without a code change. Note the trade-off: the newer the claimed
+build, the more the server may expect behaviours this client does not have.
+
 Requesting codes repeatedly makes this worse, not better; Clubhouse throttles
 by number. Leave twenty minutes between rounds of testing.
 

@@ -44,9 +44,28 @@ export const IDENTITIES = Object.freeze({
 
 export const DEFAULT_IDENTITY = "clubdeck";
 
-/** Unknown names fall back to the default rather than sending nothing. */
-export function resolveIdentity(name) {
-	return Object.freeze({ ...(IDENTITIES[name] || IDENTITIES[DEFAULT_IDENTITY]) });
+/**
+ * Unknown names fall back to the default rather than sending nothing.
+ *
+ * CLUBHOUSE_APP_VERSION and CLUBHOUSE_APP_BUILD override whichever set is
+ * picked, because the server gates features by client build - a 2021 build
+ * asking to send a reaction gets "Feature flag is not enabled", and
+ * /check_for_update names the build it wants (npm run doctor prints it). A
+ * knob makes trying that build a restart instead of a code change.
+ */
+export function resolveIdentity(name, overrides = env) {
+	const base = IDENTITIES[name] || IDENTITIES[DEFAULT_IDENTITY];
+	const appVersion = overrides.CLUBHOUSE_APP_VERSION || base.appVersion;
+	const appBuild = overrides.CLUBHOUSE_APP_BUILD || base.appBuild;
+
+	// Android-style agents embed the build; keep the two in step when the
+	// build is overridden, or the identity would contradict itself.
+	const userAgent =
+		overrides.CLUBHOUSE_APP_BUILD && /^clubhouse\/android\/\d+$/.test(base.userAgent)
+			? `clubhouse/android/${appBuild}`
+			: base.userAgent;
+
+	return Object.freeze({ userAgent, appVersion, appBuild });
 }
 
 export const APP_IDENTITY = resolveIdentity(env.CLUBHOUSE_IDENTITY);
