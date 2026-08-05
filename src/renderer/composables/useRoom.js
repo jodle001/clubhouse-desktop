@@ -352,6 +352,73 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 	const speakers = computed(() => channel.users.filter(u => u.is_speaker));
 	const audience = computed(() => channel.users.filter(u => !u.is_speaker));
 
+	/** Whether you can moderate this room - your own record says so. */
+	const canModerate = computed(() => Boolean(me.value?.is_moderator));
+
+	/** The room's grant of what you may do, from join_channel. */
+	const capabilities = computed(() => channel.info?.user_capabilities || {});
+
+	/** A moderator action gone wrong, shown where the action was taken. */
+	const modError = ref("");
+
+	/**
+	 * One moderator verb against one person: call it, and on success patch the
+	 * local record so the tiles move at once. Every one takes (channel, user_id),
+	 * the shape the probe settled.
+	 */
+	async function moderate(method, userId, patch) {
+		const name = channel.info?.channel;
+		if (!name) {
+			return false;
+		}
+
+		modError.value = "";
+
+		try {
+			await call(method, name, userId);
+			if (patch) {
+				patchUser(userId, patch);
+			}
+			return true;
+		} catch (err) {
+			modError.value = err.message;
+			return false;
+		}
+	}
+
+	const inviteToSpeak = userId => moderate("inviteSpeaker", userId, { is_invited_as_speaker: true });
+	const moveToAudience = userId => moderate("uninviteSpeaker", userId, { is_speaker: false });
+	const mutePeer = userId => moderate("muteSpeaker", userId, { is_muted: true });
+	const makeMod = userId => moderate("makeModerator", userId, { is_moderator: true });
+
+	/**
+	 * Leave the stage yourself. There is no self-service verb in the API's own
+	 * vocabulary, but uninvite_speaker takes a user id, so aiming it at your own
+	 * is the likeliest way down. Mirrors what remove_speaker does to you: mute,
+	 * drop to audience, and if it is refused, say so rather than leaving you
+	 * looking demoted when you are not.
+	 */
+	async function stepDown() {
+		const info = channel.info;
+		if (!info || !isSpeaker.value) {
+			return false;
+		}
+
+		modError.value = "";
+
+		try {
+			await call("uninviteSpeaker", info.channel, info.user_profile_id);
+			patchUser(info.user_profile_id, { is_speaker: false });
+			await audio?.setMuted(true);
+			await audio?.setRole("audience");
+			muted.value = true;
+			return true;
+		} catch (err) {
+			modError.value = err.message;
+			return false;
+		}
+	}
+
 	/**
 	 * The audience, split the way the phone app splits it. Every flag here
 	 * comes from join_channel's user objects, so this is the server's own
@@ -718,6 +785,14 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		others,
 		me,
 		isSpeaker,
+		canModerate,
+		capabilities,
+		modError,
+		inviteToSpeak,
+		moveToAudience,
+		mutePeer,
+		makeMod,
+		stepDown,
 		muted,
 		handRaised,
 		everCount,

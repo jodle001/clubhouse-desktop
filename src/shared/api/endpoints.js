@@ -154,15 +154,24 @@ export const endpoints = {
 
 	activePing: (c, channel) => c.request("/active_ping", { body: { channel, channel_id: null } }),
 
-	createChannel: (c, { topic = "", userIds = [], isPrivate = false, isSocialMode = false } = {}) =>
-		c.request("/create_channel", {
+	/**
+	 * The old is_private/is_social_mode flags are no longer enough: the API now
+	 * answers "Privacy level is required." A `privacy` string carries it -
+	 * open, social or closed, the three room kinds. The legacy flags are kept
+	 * alongside since they do no harm and an older server may still read them.
+	 */
+	createChannel: (c, { topic = "", userIds = [], isPrivate = false, isSocialMode = false } = {}) => {
+		const privacy = isPrivate ? "closed" : isSocialMode ? "social" : "open";
+		return c.request("/create_channel", {
 			body: {
 				topic,
 				user_ids: userIds,
+				privacy,
 				is_private: isPrivate,
 				is_social_mode: isSocialMode
 			}
-		}),
+		});
+	},
 
 	endChannel: (c, channel) => c.request("/end_channel", { body: { channel } }),
 

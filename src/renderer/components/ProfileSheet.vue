@@ -26,6 +26,8 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
 		<div class="sheet__body card" @click.stop>
 			<button class="sheet__close" title="Close" aria-label="Close" @click="emit('close')">✕</button>
 			<UserProfile :id="id" :linkable="false" />
+			<!-- Room moderation actions, when the opener has any to offer. -->
+			<slot />
 		</div>
 	</div>
 </template>

@@ -269,6 +269,68 @@ describe("the room outliving the view", () => {
 	});
 });
 
+describe("moderator controls over a member", () => {
+	function joinAsMod() {
+		bridge.api.joinChannel = vi.fn().mockResolvedValue({
+			ok: true,
+			data: joinResult({
+				users: [
+					{ user_id: 7, name: "Me", is_speaker: true, is_moderator: true },
+					{ user_id: 5, name: "Them", is_speaker: true }
+				],
+				user_capabilities: { can_post_to_chat: true, can_mute_speakers: true }
+			})
+		});
+		bridge.api.getProfile = vi.fn().mockResolvedValue({
+			ok: true,
+			data: { user_profile: { user_id: 5, name: "Them", username: "them" } }
+		});
+		bridge.api.me = vi.fn().mockResolvedValue({ ok: true, data: { following_ids: [], blocked_ids: [] } });
+	}
+
+	it("offers moderator actions on another member's sheet", async () => {
+		joinAsMod();
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		// The second tile is the other speaker.
+		await wrapper.findAll(".tile")[1].trigger("click");
+		await settle(wrapper);
+
+		expect(wrapper.find(".room__mod").exists()).toBe(true);
+		expect(wrapper.find(".room__mod").text()).toMatch(/Move to audience/);
+		expect(wrapper.find(".room__mod").text()).toMatch(/Mute/);
+	});
+
+	it("shows no moderator actions when you cannot moderate", async () => {
+		// Default joinResult makes you a plain speaker, not a moderator.
+		bridge.api.getProfile = vi.fn().mockResolvedValue({
+			ok: true,
+			data: { user_profile: { user_id: 7, name: "Me", username: "me" } }
+		});
+		bridge.api.me = vi.fn().mockResolvedValue({ ok: true, data: { following_ids: [], blocked_ids: [] } });
+
+		const wrapper = mountRoom();
+		await settle(wrapper);
+		await wrapper.find(".tile").trigger("click");
+		await settle(wrapper);
+
+		expect(wrapper.find(".room__mod").exists()).toBe(false);
+	});
+
+	it("does not offer moderator actions against yourself", async () => {
+		joinAsMod();
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		// The first tile is you.
+		await wrapper.findAll(".tile")[0].trigger("click");
+		await settle(wrapper);
+
+		expect(wrapper.find(".room__mod").exists()).toBe(false);
+	});
+});
+
 describe("opening a profile from a room", () => {
 	it("shows a sheet over the room instead of leaving it", async () => {
 		bridge.api.getProfile = vi.fn().mockResolvedValue({

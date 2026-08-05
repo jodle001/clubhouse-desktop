@@ -64,6 +64,11 @@ async function exit() {
 // Whose profile is open over the room, if any.
 const viewing = ref(null);
 
+// The room user behind the open sheet, so moderator actions know their state.
+const viewingUser = computed(
+	() => room.channel.users.find(u => u.user_id === viewing.value) || null
+);
+
 /**
  * The microphone button says what it actually is. Three states look identical
  * greyed out, and calling all of them "Muted" claims a mute you could undo -
@@ -277,6 +282,15 @@ async function send() {
 						{{ room.handRaised.value ? "✋ Hand raised" : "✋ Raise hand" }}
 					</button>
 
+					<!--
+						Off the stage under your own steam. There is no dedicated
+						verb, so this aims uninvite_speaker at yourself; if the
+						server refuses, the audio error shows it.
+					-->
+					<button v-if="room.isSpeaker.value" class="btn btn-secondary" @click="room.stepDown()">
+						🚶 Step down
+					</button>
+
 					<div v-if="room.reactionOptions.value.length && !room.reactionsBlocked.value" class="room__react">
 						<button
 							class="btn btn-secondary"
@@ -365,7 +379,47 @@ async function send() {
 
 		<EmptyState v-else-if="room.error.value" :message="room.error.value" />
 
-		<ProfileSheet v-if="viewing" :id="viewing" @close="viewing = null" />
+		<ProfileSheet v-if="viewing" :id="viewing" @close="viewing = null">
+			<!--
+				Moderator tools over a room member's profile - only when the
+				room says you may, and never against yourself.
+			-->
+			<div
+				v-if="room.canModerate.value && viewingUser && viewingUser.user_id !== room.channel.info.user_profile_id"
+				class="room__mod"
+			>
+				<p v-if="room.modError.value" class="room__mod-error">{{ room.modError.value }}</p>
+
+				<button
+					v-if="!viewingUser.is_speaker"
+					class="btn btn-secondary btn-sm"
+					@click="room.inviteToSpeak(viewingUser.user_id)"
+				>
+					🎤 Invite to speak
+				</button>
+				<button
+					v-if="viewingUser.is_speaker"
+					class="btn btn-secondary btn-sm"
+					@click="room.moveToAudience(viewingUser.user_id)"
+				>
+					👇 Move to audience
+				</button>
+				<button
+					v-if="viewingUser.is_speaker && room.capabilities.value.can_mute_speakers"
+					class="btn btn-secondary btn-sm"
+					@click="room.mutePeer(viewingUser.user_id)"
+				>
+					🔇 Mute
+				</button>
+				<button
+					v-if="viewingUser.is_speaker && !viewingUser.is_moderator"
+					class="btn btn-secondary btn-sm"
+					@click="room.makeMod(viewingUser.user_id)"
+				>
+					✳️ Make moderator
+				</button>
+			</div>
+		</ProfileSheet>
 	</div>
 </template>
 
@@ -475,6 +529,24 @@ async function send() {
 	margin: 0 0.5rem 0 0;
 	max-width: 22rem;
 	font-size: 0.76rem;
+	color: var(--danger);
+}
+
+.room__mod {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	justify-content: center;
+	margin-top: 1rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--border);
+}
+
+.room__mod-error {
+	flex-basis: 100%;
+	text-align: center;
+	margin: 0;
+	font-size: 0.78rem;
 	color: var(--danger);
 }
 

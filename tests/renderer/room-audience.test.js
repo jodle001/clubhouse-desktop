@@ -373,6 +373,146 @@ describe("an invitation that predates this session", () => {
 	});
 });
 
+describe("moderator controls", () => {
+	function joinAsMod(users) {
+		bridge.api.joinChannel = vi.fn().mockResolvedValue({
+			ok: true,
+			data: {
+				success: true,
+				channel: "C1",
+				user_profile_id: 9,
+				users,
+				user_capabilities: { can_mute_speakers: true }
+			}
+		});
+	}
+
+	beforeEach(() => {
+		bridge.api.inviteSpeaker = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+		bridge.api.uninviteSpeaker = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+		bridge.api.muteSpeaker = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+		bridge.api.makeModerator = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+	});
+
+	it("knows whether you may moderate, from your own record", async () => {
+		joinAsMod([person(9, { is_moderator: true, is_speaker: true }), person(5, { is_speaker: true })]);
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		expect(room.canModerate.value).toBe(true);
+		expect(room.capabilities.value.can_mute_speakers).toBe(true);
+	});
+
+	it("is not a moderator just by being in the room", async () => {
+		joinWith([person(9), person(5, { is_speaker: true })]);
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		expect(room.canModerate.value).toBe(false);
+	});
+
+	it("invites a listener to the stage", async () => {
+		joinAsMod([person(9, { is_moderator: true, is_speaker: true }), person(5)]);
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		await expect(room.inviteToSpeak(5)).resolves.toBe(true);
+		expect(bridge.api.inviteSpeaker).toHaveBeenCalledWith("C1", 5);
+	});
+
+	it("moves a speaker down to the audience", async () => {
+		joinAsMod([person(9, { is_moderator: true, is_speaker: true }), person(5, { is_speaker: true })]);
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		await expect(room.moveToAudience(5)).resolves.toBe(true);
+		expect(bridge.api.uninviteSpeaker).toHaveBeenCalledWith("C1", 5);
+		expect(room.channel.users.find(u => u.user_id === 5).is_speaker).toBe(false);
+	});
+
+	it("makes a speaker a moderator", async () => {
+		joinAsMod([person(9, { is_moderator: true, is_speaker: true }), person(5, { is_speaker: true })]);
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		await room.makeMod(5);
+		expect(bridge.api.makeModerator).toHaveBeenCalledWith("C1", 5);
+		expect(room.channel.users.find(u => u.user_id === 5).is_moderator).toBe(true);
+	});
+
+	it("reports a refused moderator action rather than lying about it", async () => {
+		joinAsMod([person(9, { is_moderator: true, is_speaker: true }), person(5, { is_speaker: true })]);
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		bridge.api.uninviteSpeaker = vi
+			.fn()
+			.mockResolvedValue({ ok: false, error: { message: "Not allowed", status: 403 } });
+
+		await expect(room.moveToAudience(5)).resolves.toBe(false);
+		expect(room.modError.value).toBe("Not allowed");
+		expect(room.channel.users.find(u => u.user_id === 5).is_speaker).toBe(true);
+	});
+});
+
+describe("stepping off the stage yourself", () => {
+	let audio;
+
+	function makeRoomWithAudio() {
+		const room = useRoom({
+			makeAudio: async () => {
+				audio = new FakeAudioEngine();
+				return audio;
+			},
+			makeEvents: async () => new FakeRoomEvents()
+		});
+		return room;
+	}
+
+	it("aims uninvite_speaker at your own id, and drops to audience", async () => {
+		// The API has no self-service step-down verb; uninvite_speaker takes a
+		// user id, so turning it on yourself is the likeliest way down.
+		joinWith([person(9, { is_speaker: true })]);
+		bridge.api.uninviteSpeaker = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+
+		const room = makeRoomWithAudio();
+		await room.join("C1", { userId: 9 });
+		expect(room.isSpeaker.value).toBe(true);
+
+		await expect(room.stepDown()).resolves.toBe(true);
+
+		expect(bridge.api.uninviteSpeaker).toHaveBeenCalledWith("C1", 9);
+		expect(room.isSpeaker.value).toBe(false);
+		expect(room.muted.value).toBe(true);
+		expect(audio.calls).toContainEqual(["setRole", "audience"]);
+	});
+
+	it("does nothing for somebody who is not on stage", async () => {
+		joinWith([person(9)]);
+		bridge.api.uninviteSpeaker = vi.fn();
+
+		const room = makeRoomWithAudio();
+		await room.join("C1", { userId: 9 });
+
+		await expect(room.stepDown()).resolves.toBe(false);
+		expect(bridge.api.uninviteSpeaker).not.toHaveBeenCalled();
+	});
+
+	it("stays on stage if the server refuses the step-down", async () => {
+		joinWith([person(9, { is_speaker: true })]);
+		bridge.api.uninviteSpeaker = vi
+			.fn()
+			.mockResolvedValue({ ok: false, error: { message: "Nope", status: 400 } });
+
+		const room = makeRoomWithAudio();
+		await room.join("C1", { userId: 9 });
+
+		await expect(room.stepDown()).resolves.toBe(false);
+		expect(room.isSpeaker.value).toBe(true);
+		expect(room.modError.value).toBe("Nope");
+	});
+});
+
 describe("the audio role follows the stage", () => {
 	/**
 	 * Agora's live mode starts everybody as audience, and audience cannot

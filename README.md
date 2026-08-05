@@ -184,8 +184,11 @@ routed at all.
 | `POST /send_channel_reaction` | alive - emoji over the room |
 | `POST /like_channel_message`, `/unlike_channel_message` | alive - `{ channel, message_id }` |
 | `POST /get_conversations` | alive - the Chats feed, `{ conversations, next_cursor }` |
-| `POST /get_conversation` | alive - one thread, `{ conversation_id }` |
+| `POST /get_conversation` | alive - one thread with its segments, `{ conversation_id }` |
 | `POST /create_conversation` | version-gated: "please upgrade your app" |
+| `POST /invite_speaker`, `/uninvite_speaker` | alive - `{ channel, user_id }` |
+| `POST /mute_speaker`, `/make_moderator` | alive - `{ channel, user_id }` |
+| `POST /create_channel` | alive - needs `privacy` (open/social/closed), not just the old flags |
 | `POST /send_wave` | alive |
 | `POST /get_channel_user_poll` | alive - `{ channel }` |
 | `POST /create_channel_user_poll` | alive, wants parameters |
