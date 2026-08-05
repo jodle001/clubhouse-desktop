@@ -11,6 +11,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { endpoints } from "../shared/api/endpoints.js";
 
+// The surface is exactly the endpoint set - no hand-maintained copy to drift.
 const API_METHODS = Object.keys(endpoints);
 
 const api = {};

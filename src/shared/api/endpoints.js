@@ -56,6 +56,17 @@ export const endpoints = {
 			body: { query, cofollows_only: false, followers_only: false, following_only: false }
 		}),
 
+	/**
+	 * People to follow. A GET, paginated: answers { users, count, next,
+	 * previous, next_sequence }, and `page` walks it. The retired
+	 * /get_following and /get_followers had no replacement, so this - and
+	 * search - is the whole way to find people now.
+	 */
+	getSuggestedFollows: (c, { page = 1, pageSize = 25 } = {}) =>
+		c.request("/get_suggested_follows_all", {
+			query: { in_onboarding: false, page, page_size: pageSize }
+		}),
+
 	// get_online_friends, get_notifications, get_events, get_following and
 	// get_followers used to live here. All retired by Clubhouse - a plain-text
 	// 404, meaning the path is not routed at all - with no replacement found

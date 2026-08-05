@@ -40,6 +40,7 @@ async function logout() {
 		</form>
 
 		<nav class="nav__actions">
+			<RouterLink :to="{ name: 'people' }" class="btn btn-secondary btn-sm">People</RouterLink>
 			<RouterLink :to="{ name: 'me' }" class="btn btn-secondary btn-sm">
 				{{ state.user?.user_profile?.name || "Me" }}
 			</RouterLink>
