@@ -37,9 +37,15 @@ function segmentAuthor(seg) {
 	return seg.creator_user_profile || seg.user_profile || { name: "Someone" };
 }
 
-/** A voice recording worth a player, as opposed to the silent placeholder. */
+/**
+ * A voice recording worth a player, as opposed to the silent placeholder a
+ * text/photo post reuses. Only a segment that says it *was* shared without
+ * voice is skipped; one that omits the flag but carries audio still gets a
+ * player, since dropping a real recording is worse than an occasional silent
+ * one.
+ */
 function segmentVoice(seg) {
-	return seg.shared_without_voice === false && seg.segment_audio_url ? seg.segment_audio_url : null;
+	return seg.shared_without_voice !== true && seg.segment_audio_url ? seg.segment_audio_url : null;
 }
 
 onMounted(load);

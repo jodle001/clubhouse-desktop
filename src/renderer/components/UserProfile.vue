@@ -19,7 +19,7 @@ const props = defineProps({
 });
 
 const { state } = useSession();
-const { run, loading } = useApi();
+const { run, call, loading } = useApi();
 
 const profile = ref(null);
 const busy = ref(false);
@@ -32,17 +32,25 @@ const isMe = computed(
 	() => props.id === "me" || Number(props.id) === state.user?.user_profile?.user_id
 );
 
+/** A sent-but-unanswered request to a protected account. */
+const requested = computed(() => /request|pending/i.test(profile.value?.follow_status || ""));
+
 /**
  * `follow_status` is the profile's own answer, so it beats inferring the
  * relationship from a list. /me's following_ids is the fallback for a response
  * that omits it.
+ *
+ * A pending request is *not* following - it must fall through to the
+ * "Requested" label, not read as an accepted follow whose button unfollows.
  */
 const following = computed(() => {
 	const status = profile.value?.follow_status;
-	return status ? status !== "not_following" : Boolean(profile.value?._following);
-});
+	if (status) {
+		return status !== "not_following" && !requested.value;
+	}
 
-const requested = computed(() => /request|pending/i.test(profile.value?.follow_status || ""));
+	return Boolean(profile.value?._following);
+});
 
 const joined = computed(() => {
 	const raw = profile.value?.time_created;
@@ -90,15 +98,32 @@ async function load() {
 	 * The route can say "me" without knowing the id, so that case waits for /me
 	 * to supply one. Any other id is already known and fetches in parallel.
 	 */
-	const known = props.id === "me" ? null : Number(props.id);
-	const [mine, direct] = await Promise.all([
-		run("me"),
-		known ? run("getProfile", known) : null
-	]);
+	// call(), not run(), driven by one loading window we own: two parallel
+	// run()s share a single loading ref, and the first to resolve flips it
+	// false while the other is still in flight - blanking the view (no spinner,
+	// no profile) until the second lands.
+	loading.value = true;
+	let mine = null;
+	let result = null;
 
-	const userId = known ?? mine?.user_profile?.user_id;
-	const result = direct ?? (userId ? await run("getProfile", userId) : null);
+	try {
+		const known = props.id === "me" ? null : Number(props.id);
+		let direct;
+		[mine, direct] = await Promise.all([
+			call("me").catch(() => null),
+			known ? call("getProfile", known) : Promise.resolve(null)
+		]);
+
+		const userId = known ?? mine?.user_profile?.user_id;
+		result = direct ?? (userId ? await call("getProfile", userId) : null);
+	} catch (err) {
+		notify({ type: "error", message: err.message });
+	} finally {
+		loading.value = false;
+	}
+
 	const found = result?.user_profile || null;
+	const userId = props.id === "me" ? mine?.user_profile?.user_id : Number(props.id);
 
 	if (found) {
 		// Whether *we* blocked them is only in /me; the profile's

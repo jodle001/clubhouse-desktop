@@ -122,35 +122,43 @@ onMounted(loadFirst);
 		</header>
 
 		<AppSpinner v-if="loading" />
-		<EmptyState v-else-if="!visible.length" icon="💬" message="No conversations." />
 
-		<ul v-else class="convos">
-			<li
-				v-for="c in visible"
-				:key="c.conversation_id"
-				class="convo"
-				:class="{ 'convo--new': c.has_new_segments }"
-				tabindex="0"
-				role="button"
-				@click="open(c)"
-				@keyup.enter="open(c)"
-			>
-				<AppAvatar :user="facePic(c)" :size="46" />
-				<div class="convo__body">
-					<div class="convo__top">
-						<span class="convo__title truncate">{{ c.title || "Untitled" }}</span>
-						<span class="convo__time muted">{{ relativeTime(c.time_content_updated) }}</span>
+		<template v-else>
+			<!--
+				Emptiness is judged on what is visible, but Show more stays
+				reachable regardless: a first page of only archived threads
+				must not strand a cursor that later pages could still fill.
+			-->
+			<EmptyState v-if="!visible.length" icon="💬" message="No conversations." />
+
+			<ul v-if="visible.length" class="convos">
+				<li
+					v-for="c in visible"
+					:key="c.conversation_id"
+					class="convo"
+					:class="{ 'convo--new': c.has_new_segments }"
+					tabindex="0"
+					role="button"
+					@click="open(c)"
+					@keyup.enter="open(c)"
+				>
+					<AppAvatar :user="facePic(c)" :size="46" />
+					<div class="convo__body">
+						<div class="convo__top">
+							<span class="convo__title truncate">{{ c.title || "Untitled" }}</span>
+							<span class="convo__time muted">{{ relativeTime(c.time_content_updated) }}</span>
+						</div>
+						<p class="convo__context muted truncate">{{ context(c) }}</p>
+						<p class="convo__preview truncate">{{ preview(c) }}</p>
 					</div>
-					<p class="convo__context muted truncate">{{ context(c) }}</p>
-					<p class="convo__preview truncate">{{ preview(c) }}</p>
-				</div>
-				<span v-if="c.has_new_segments" class="convo__dot" aria-label="New" />
-			</li>
+					<span v-if="c.has_new_segments" class="convo__dot" aria-label="New" />
+				</li>
+			</ul>
 
 			<button v-if="cursor" class="btn btn-secondary load-more" :disabled="loadingMore" @click="loadMore">
 				{{ loadingMore ? "Loading…" : "Show more" }}
 			</button>
-		</ul>
+		</template>
 	</div>
 </template>
 

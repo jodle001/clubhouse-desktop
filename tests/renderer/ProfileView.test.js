@@ -113,6 +113,21 @@ describe("ProfileView", () => {
 		expect(wrapper.find(".profile__actions button").text()).toBe("Following");
 	});
 
+	it("shows Requested, not Following, for a pending request", async () => {
+		// A protected account you have asked to follow: follow_status names the
+		// pending state, and it must not read as an accepted follow whose
+		// button would unfollow.
+		bridge.api.getProfile = vi.fn().mockResolvedValue({
+			ok: true,
+			data: { user_profile: theirProfile({ follow_status: "follow_requested" }) }
+		});
+
+		const wrapper = mountProfile();
+		await settle(wrapper);
+
+		expect(wrapper.find(".profile__actions button").text()).toBe("Requested");
+	});
+
 	it("falls back to following_ids when follow_status is absent", async () => {
 		const withoutStatus = theirProfile();
 		delete withoutStatus.follow_status;

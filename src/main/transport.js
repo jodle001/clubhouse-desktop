@@ -33,6 +33,7 @@ function toResponse(res, text) {
 function decoder(encoding) {
 	switch ((encoding || "").trim().toLowerCase()) {
 		case "gzip":
+		case "x-gzip":
 			return createGunzip();
 		case "deflate":
 			return createInflate();
@@ -41,6 +42,38 @@ function decoder(encoding) {
 		default:
 			return null;
 	}
+}
+
+/**
+ * The response body, decompressed. Content-Encoding may list more than one
+ * coding ("gzip, br"), applied left to right, so they are undone in reverse.
+ * An unknown coding among them means the body cannot be safely decoded, so it
+ * is left as-is rather than half-decoded - the old single-token switch turned
+ * any multi-coding header into raw compressed bytes read as text.
+ */
+function decodedBody(res) {
+	const header = (res.headers["content-encoding"] || "").trim();
+	if (!header) {
+		return res;
+	}
+
+	const codings = header
+		.toLowerCase()
+		.split(",")
+		.map(part => part.trim())
+		.filter(Boolean);
+
+	let stream = res;
+	for (const coding of codings.reverse()) {
+		const step = decoder(coding);
+		if (!step) {
+			return res;
+		}
+
+		stream = stream.pipe(step);
+	}
+
+	return stream;
 }
 
 /** Long enough for a slow mobile API, short enough that the UI is not stuck. */
@@ -73,8 +106,7 @@ export function nodeTransport(url, { method = "GET", headers = {}, body, timeout
 				headers: finalHeaders
 			},
 			res => {
-				const stream = decoder(res.headers["content-encoding"]);
-				const source = stream ? res.pipe(stream) : res;
+				const source = decodedBody(res);
 
 				let text = "";
 				source.setEncoding("utf8");
@@ -86,7 +118,7 @@ export function nodeTransport(url, { method = "GET", headers = {}, body, timeout
 				// on a compressed response would error on `res`, unpipe, and
 				// leave the zlib stream waiting forever for data that is never
 				// coming - a promise that neither resolves nor rejects.
-				if (stream) {
+				if (source !== res) {
 					res.on("error", reject);
 				}
 			}

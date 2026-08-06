@@ -30,6 +30,16 @@ beforeAll(async () => {
 				return;
 			}
 
+			// Two codings, applied in order: gzip then brotli. Undone in reverse.
+			if (req.url.endsWith("/double")) {
+				res.writeHead(200, {
+					"Content-Type": "application/json",
+					"Content-Encoding": "gzip, br"
+				});
+				res.end(brotliCompressSync(gzipSync(JSON.stringify({ success: true, layers: 2 }))));
+				return;
+			}
+
 			if (req.url.endsWith("/html")) {
 				res.writeHead(502, { "Content-Type": "text/html" });
 				res.end("<html><body>502 Bad Gateway</body></html>");
@@ -104,6 +114,13 @@ describe("nodeTransport", () => {
 		// All three are advertised in Accept-Encoding, so all three must work.
 		const response = await nodeTransport(`${root}/${path}`);
 		expect(JSON.parse(await response.text())).toEqual({ success: true, compressed: encoding });
+	});
+
+	it("undoes a multi-coding Content-Encoding in reverse", async () => {
+		// "gzip, br" means gzip then brotli on the way out; the old single-token
+		// switch matched neither and returned the compressed bytes as text.
+		const response = await nodeTransport(`${root}/double`);
+		expect(JSON.parse(await response.text())).toEqual({ success: true, layers: 2 });
 	});
 
 	it("reports a non-2xx through ok/status rather than throwing", async () => {

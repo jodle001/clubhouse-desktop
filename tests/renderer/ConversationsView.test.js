@@ -124,6 +124,22 @@ describe("ConversationsView", () => {
 		expect(wrapper.find(".load-more").exists()).toBe(false);
 	});
 
+	it("keeps Show more reachable when a page is all archived", async () => {
+		// The empty-state must not strand a live cursor that a later page
+		// could fill with non-archived threads.
+		bridge.api.getConversations = vi.fn().mockResolvedValue({
+			ok: true,
+			data: { conversations: [convo("a", { is_archived: true })], next_cursor: "CUR" }
+		});
+
+		const wrapper = mountView();
+		await settle(wrapper);
+
+		expect(wrapper.findAll(".convo")).toHaveLength(0);
+		expect(wrapper.text()).toContain("No conversations.");
+		expect(wrapper.find(".load-more").exists()).toBe(true);
+	});
+
 	it("says so plainly when there are none", async () => {
 		bridge.api.getConversations = vi.fn().mockResolvedValue({ ok: true, data: { conversations: [] } });
 
