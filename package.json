@@ -27,6 +27,7 @@
     "probe:poll": "node scripts/poll-probe.js",
     "probe:settings": "node scripts/settings-probe.js",
     "probe:features": "node scripts/features-probe.js",
+    "probe:wave": "node scripts/wave-probe.js",
     "endpoints": "node scripts/extract-endpoints.mjs",
     "decompile": "node scripts/decompile.mjs",
     "pack": "npm run build && electron-builder --dir",
