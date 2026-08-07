@@ -179,16 +179,16 @@ if (got.data) {
 	console.log(JSON.stringify(got.data).slice(0, 600));
 }
 
-/** Find option ids anywhere in the poll payload. */
-function optionIds(value, out = []) {
+/** Find every value under a key matching `re`, anywhere in the payload. */
+function valuesUnder(re, value, out = []) {
 	if (Array.isArray(value)) {
-		value.forEach(v => optionIds(v, out));
+		value.forEach(v => valuesUnder(re, v, out));
 	} else if (value && typeof value === "object") {
 		for (const [k, v] of Object.entries(value)) {
-			if (/^(poll_option_id|option_id|id)$/.test(k) && (typeof v === "number" || typeof v === "string")) {
+			if (re.test(k) && (typeof v === "number" || typeof v === "string")) {
 				out.push(v);
 			} else {
-				optionIds(v, out);
+				valuesUnder(re, v, out);
 			}
 		}
 	}
@@ -197,30 +197,49 @@ function optionIds(value, out = []) {
 }
 
 const source = created?.data || got.data || {};
-const ids = [...new Set(optionIds(source))];
-console.log(`\noption ids seen: ${ids.length ? ids.join(", ") : "(none found - shape above)"}`);
+const ids = [...new Set(valuesUnder(/^poll_option_id$/, source))];
+const pollId = valuesUnder(/^poll_id$/, source)[0] || null;
+console.log(`\npoll_id: ${pollId ?? "(none found)"}`);
+console.log(`option ids seen: ${ids.length ? ids.join(", ") : "(none found - shape above)"}`);
 
-// --- vote: name that field too ----------------------------------------------
+// --- vote: /vote_channel_user_poll 404s, so it is the verb name that is
+// wrong, not the fields. The payload calls the option poll_option_id; carry
+// that and the poll_id and walk the plausible names. ------------------------
 
 if (ids.length) {
-	heading("vote_channel_user_poll - field-name ladder");
+	heading("vote - endpoint-name ladder");
 
-	const optionId = ids[0];
-	const voteBodies = [
-		{ channel, poll_option_id: optionId },
-		{ channel, option_id: optionId },
-		{ channel, selected_poll_option_id: optionId },
-		{ channel, channel_user_poll_option_id: optionId }
+	const body = { channel, poll_id: pollId, poll_option_id: ids[0] };
+	const paths = [
+		"/vote_in_channel_user_poll",
+		"/submit_channel_user_poll_vote",
+		"/create_channel_user_poll_vote",
+		"/channel_user_poll_vote",
+		"/cast_channel_user_poll_vote",
+		"/select_channel_user_poll_option",
+		"/set_channel_user_poll_vote",
+		"/answer_channel_user_poll",
+		"/vote_for_channel_user_poll_option",
+		"/add_channel_user_poll_vote",
+		"/update_channel_user_poll_vote",
+		"/set_selected_poll_option"
 	];
 
-	for (const body of voteBodies) {
-		const result = await post("/vote_channel_user_poll", body);
-		const field = Object.keys(body).find(k => k !== "channel");
-		console.log(`${field.padEnd(34)} ${verdict(result)}`);
+	let voted = false;
+	for (const path of paths) {
+		const result = await post(path, body);
+		console.log(`${path.padEnd(40)} ${verdict(result)}`);
 		if (ok(result)) {
-			console.log(`  -> voted with { ${field}: ${optionId} }`);
+			console.log(`  -> voted via ${path} { poll_id, poll_option_id }`);
+			voted = true;
 			break;
 		}
+	}
+
+	// Read the tallies back, so a silent 200 is confirmed to have counted.
+	if (voted) {
+		const after = await post("/get_channel_user_poll", { channel });
+		console.log(`\nresults after voting: ${JSON.stringify(after.data?.channel_user_poll?.poll_results || after.data?.poll_results)?.slice(0, 300)}`);
 	}
 } else {
 	console.log("\nNo option id to vote with - the create/get shape above is the thing to read.");
