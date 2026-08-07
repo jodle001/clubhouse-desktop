@@ -155,25 +155,43 @@ export const endpoints = {
 	activePing: (c, channel) => c.request("/active_ping", { body: { channel, channel_id: null } }),
 
 	/**
-	 * The old is_private/is_social_mode flags are no longer enough: the API
-	 * answers "Privacy level is required." - and kept answering it when the
-	 * value was sent as `privacy`, so the field is named the way the error
-	 * reads: `privacy_level`. Sent under both names with the legacy flags
-	 * alongside, since unknown fields are ignored and an older server may
-	 * still read the old ones.
+	 * The old is_private/is_social_mode flags are no longer enough. The server
+	 * named its field one 400 at a time: "Privacy level is required." while it
+	 * was sent as `privacy`, then '"open" is not a valid choice.' once
+	 * privacy_level carried it - so the field is right and the spelling of its
+	 * values is not. Those spellings are unknown, but this API writes its
+	 * other enums uppercase (VOICE_REPLY), so walk the plausible ones; a
+	 * rejected spelling costs one 400 and creates nothing, and any other
+	 * error is the caller's to see.
 	 */
-	createChannel: (c, { topic = "", userIds = [], isPrivate = false, isSocialMode = false } = {}) => {
-		const privacy = isPrivate ? "closed" : isSocialMode ? "social" : "open";
-		return c.request("/create_channel", {
-			body: {
-				topic,
-				user_ids: userIds,
-				privacy_level: privacy,
-				privacy,
-				is_private: isPrivate,
-				is_social_mode: isSocialMode
+	createChannel: async (c, { topic = "", userIds = [], isPrivate = false, isSocialMode = false } = {}) => {
+		const spellings = isPrivate
+			? ["CLOSED", "PRIVATE", "private", "closed"]
+			: isSocialMode
+				? ["SOCIAL", "social"]
+				: ["OPEN", "PUBLIC", "public", "open_room"];
+
+		let refused;
+		for (const level of spellings) {
+			try {
+				return await c.request("/create_channel", {
+					body: {
+						topic,
+						user_ids: userIds,
+						privacy_level: level,
+						is_private: isPrivate,
+						is_social_mode: isSocialMode
+					}
+				});
+			} catch (err) {
+				if (!/not a valid choice/i.test(err.message)) {
+					throw err;
+				}
+				refused = err;
 			}
-		});
+		}
+
+		throw refused;
 	},
 
 	endChannel: (c, channel) => c.request("/end_channel", { body: { channel } }),
