@@ -607,6 +607,39 @@ describe("reacting at a person", () => {
 		expect(wrapper.find(".room__sheet-react").exists()).toBe(false);
 	});
 
+	it("keeps chat messages visible when a reaction is refused", async () => {
+		// The bug: a refused reaction wrote to chat.error, and the panel hid its
+		// whole message list whenever chat.error was set - so one bad reaction
+		// wiped the conversation until a rejoin.
+		joinWithPalette();
+		bridge.api.getChannelMessages = vi.fn().mockResolvedValue({
+			ok: true,
+			data: {
+				success: true,
+				messages: [
+					{ message_id: "M1", message: "hello", time_created: "2026-08-06T10:00:00Z", user_profile: { user_id: 5, name: "Them" } }
+				]
+			}
+		});
+		bridge.api.sendChannelReaction = vi
+			.fn()
+			.mockResolvedValue({ ok: false, error: { message: "Feature flag is not enabled", status: 400 } });
+
+		const wrapper = mountRoom();
+		await settle(wrapper);
+		expect(wrapper.findAll(".room__messages li").length).toBeGreaterThan(0);
+
+		await wrapper.findAll(".tile")[1].trigger("click");
+		await settle(wrapper);
+		await wrapper.find(".room__sheet-react .room__palette-emoji").trigger("click");
+		await settle(wrapper);
+
+		// Chat survives: the message is still there, and the error did not land
+		// in the chat panel.
+		expect(wrapper.findAll(".room__messages li").length).toBeGreaterThan(0);
+		expect(wrapper.find(".room__chat-error").exists()).toBe(false);
+	});
+
 	it("opens the author's sheet from their name on a chat line", async () => {
 		// "Click a person in chat, then pick a reaction" - the name is the way in.
 		joinWithPalette();

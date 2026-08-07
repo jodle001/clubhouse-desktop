@@ -339,10 +339,15 @@ async function send() {
 
 					<!--
 						A microphone that refuses used to do so silently, which
-						is indistinguishable from a dead button.
+						is indistinguishable from a dead button. A refused
+						reaction shows here too - beside the bar it belongs to,
+						not in the chat panel where it used to wipe the messages.
 					-->
 					<p v-if="room.audioError.value" class="room__audio-error">
 						{{ room.audioError.value }}
+					</p>
+					<p v-if="room.reactionError.value" class="room__audio-error">
+						{{ room.reactionError.value }}
 					</p>
 				</footer>
 			</div>
@@ -361,9 +366,15 @@ async function send() {
 				<div v-show="chatOpen" class="room__panel">
 					<h2 class="room__heading">Chat</h2>
 
+					<!--
+						A chat error is a note above the conversation, not a
+						replacement for it: showing it with v-else hid every
+						message the moment anything failed, and only a rejoin
+						brought them back.
+					-->
 					<p v-if="room.chat.error" class="room__chat-error">{{ room.chat.error }}</p>
 
-					<EmptyState v-else-if="!room.chat.messages.length" message="No messages yet." />
+					<EmptyState v-if="!room.chat.messages.length" message="No messages yet." />
 
 					<ul v-else ref="log" class="room__messages" @scroll.passive="maybeLoadOlder">
 						<li v-if="room.chat.nextCursor" class="room__older muted">

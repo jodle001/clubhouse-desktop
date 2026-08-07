@@ -46,6 +46,13 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 	const reactionOptions = ref([]);
 	/** Set once the server refuses on a feature flag, so the picker retires. */
 	const reactionsBlocked = ref(false);
+	/**
+	 * A reaction that would not send. Kept apart from chat.error: a failed
+	 * reaction is not a chat problem, and writing it to chat.error both put a
+	 * red line in the chat panel and - because the panel hides its message list
+	 * whenever chat.error is set - wiped the conversation until a rejoin.
+	 */
+	const reactionError = ref("");
 
 	const REACTION_MS = 4000;
 	/** However long an event asks for, a reaction is not a billboard. */
@@ -109,10 +116,10 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			// therefore parked: retire the picker with an honest message.
 			// Receiving is unaffected - others' reactions and gifs still show.
 			if (/feature flag/i.test(err.message)) {
-				chat.error = "Clubhouse won't accept reactions from this desktop client. You'll still see others' reactions.";
+				reactionError.value = "Clubhouse won't accept reactions from this desktop client. You'll still see others' reactions.";
 				reactionsBlocked.value = true;
 			} else {
-				chat.error = err.message;
+				reactionError.value = err.message;
 			}
 			return false;
 		}
@@ -984,6 +991,7 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		reactions.value = [];
 		reactionOptions.value = [];
 		reactionsBlocked.value = false;
+		reactionError.value = "";
 		loggedReactionEvent = false;
 
 		poll.metadata = null;
@@ -1127,6 +1135,7 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		toggleMessageLike,
 		reactionOptions,
 		reactionsBlocked,
+		reactionError,
 		reactionFor,
 		sendReaction,
 		poll,

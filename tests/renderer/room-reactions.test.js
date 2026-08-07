@@ -252,7 +252,10 @@ describe("emoji over the room", () => {
 
 		await expect(room.sendReaction(room.reactionOptions.value[0])).resolves.toBe(false);
 		expect(room.reactionFor(9)).toBeNull();
-		expect(room.chat.error).toBe("Nope");
+		// A reaction failure is its own error, not chat's - writing it to
+		// chat.error hid every chat message until a rejoin.
+		expect(room.reactionError.value).toBe("Nope");
+		expect(room.chat.error).toBe("");
 	});
 
 	it("retires the picker when the server refuses on its feature flag", async () => {
@@ -270,7 +273,8 @@ describe("emoji over the room", () => {
 		await room.sendReaction(room.reactionOptions.value[0]);
 
 		expect(room.reactionsBlocked.value).toBe(true);
-		expect(room.chat.error).toMatch(/won't accept reactions from this desktop client/i);
+		expect(room.reactionError.value).toMatch(/won't accept reactions from this desktop client/i);
+		expect(room.chat.error).toBe("");
 	});
 
 	it("clears every floating emoji on leaving", async () => {
