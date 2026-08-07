@@ -148,25 +148,55 @@ for (const file of files) {
 	});
 }
 
-// --- print the fields of any request/response type it uses -----------------
-for (const type of referencedTypes) {
-	const typeFiles = grepFiles(`class ${type} `).concat(grepFiles(`class ${type}(`));
+// --- print the wire fields of any type it uses, following nested types -----
+//
+// This is kotlinx.serialization: the wire field names are string literals in
+// the generated serializer's descriptor, and enum variants carry their
+// @SerialName the same way. So the reliable signal is the set of quoted
+// literals in a type's file - the snake_case ones are the field/variant names.
+// Nested types named in a constructor (e.g. SourceLocation on a wave) are
+// followed one level so an enum's values come through too.
+const PRIMITIVE =
+	/^(int|long|boolean|double|float|byte|short|char|void|String|Object|List|Map|Set|Integer|Boolean|Long|Double|Float|Companion|KSerializer|SerialDescriptor|Decoder|Encoder|SerializationException|Unit|Array)$/;
+
+function reportType(type, seen) {
+	if (seen.has(type) || PRIMITIVE.test(type)) {
+		return;
+	}
+	seen.add(type);
+
+	const typeFiles = grepFiles(`class ${type} `)
+		.concat(grepFiles(`class ${type}(`))
+		.concat(grepFiles(`enum ${type} `));
 	for (const file of [...new Set(typeFiles)]) {
 		const body = readFileSync(file, "utf8");
-		if (!new RegExp(`class ${type}\\b`).test(body)) {
+		if (!new RegExp(`(class|enum) ${type}\\b`).test(body)) {
 			continue;
 		}
 
-		console.log(`— fields of ${type} (${file.replace(srcDir + "/", "")}):`);
-		for (const line of body.split("\n")) {
-			// The serialized name is the wire field; catch Gson and Moshi both,
-			// plus plain field declarations as a fallback.
-			if (/@(SerializedName|Json)\s*\(|@Json\(name|private\s+\w|public\s+\w/.test(line) && !/void|class |return/.test(line)) {
-				console.log(`    ${line.trim()}`);
+		// Wire names: quoted lowercase tokens (fields) and quoted UPPER tokens
+		// (enum @SerialName values), minus the fully-qualified class name.
+		const literals = [...new Set([...body.matchAll(/"([A-Za-z][A-Za-z0-9_]{1,40})"/g)].map(m => m[1]))]
+			.filter(t => !/^[A-Z][a-z]/.test(t) || /_/.test(t)) // drop PascalCase class-ish tokens
+			.filter(t => t !== type);
+
+		console.log(`— ${type} (${file.replace(srcDir + "/", "")})`);
+		console.log(`    wire literals: ${literals.join(", ") || "(none found)"}`);
+
+		// Follow the primary constructor's own object types one level deep.
+		const ctor = body.split("\n").find(l => new RegExp(`public ${type}\\(`).test(l)) || "";
+		for (const m of ctor.matchAll(/\b([A-Z][A-Za-z0-9_]+)\b/g)) {
+			if (m[1] !== type) {
+				reportType(m[1], seen);
 			}
 		}
 		console.log("");
 	}
+}
+
+const seen = new Set();
+for (const type of referencedTypes) {
+	reportType(type, seen);
 }
 
 // tiny helper so the cache dir is discoverable if something looks stale
