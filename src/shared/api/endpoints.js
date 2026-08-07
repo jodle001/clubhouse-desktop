@@ -30,6 +30,14 @@ export const endpoints = {
 
 	getProfile: (c, userId) => c.request("/get_profile", { body: { user_id: userId } }),
 
+	/**
+	 * The activity feed - who followed, invited, waved. Not /get_notifications
+	 * (that 404s); the live verb is get_activities. Answers { success,
+	 * activities, next_cursor }, each activity a list of `details` (each with a
+	 * title and an avatar) and an `is_unread` flag. Cursor-paginated.
+	 */
+	getActivities: (c, { cursor } = {}) => c.request("/get_activities", { body: { cursor } }),
+
 	// --- conversations ------------------------------------------------
 	/**
 	 * The modern "Chats" feed: async voice/text threads, not 1:1 DMs. Answers

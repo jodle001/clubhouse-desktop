@@ -1,13 +1,18 @@
 <script setup>
-import { ref } from "vue";
+import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useSession } from "../composables/useSession.js";
 import { useSharedRoom } from "../composables/useRoom.js";
+import { useActivity } from "../composables/useActivity.js";
 
 const router = useRouter();
 const { state, signOut } = useSession();
 const room = useSharedRoom();
+const { unreadCount, load: loadActivity } = useActivity();
 const query = ref("");
+
+// The bell's dot: load the activity feed once when the chrome mounts.
+onMounted(loadActivity);
 
 function search() {
 	const q = query.value.trim();
@@ -42,6 +47,15 @@ async function logout() {
 		<nav class="nav__actions">
 			<RouterLink :to="{ name: 'conversations' }" class="btn btn-secondary btn-sm">Chats</RouterLink>
 			<RouterLink :to="{ name: 'people' }" class="btn btn-secondary btn-sm">People</RouterLink>
+			<RouterLink
+				:to="{ name: 'notifications' }"
+				class="btn btn-secondary btn-sm nav__bell"
+				title="Notifications"
+				aria-label="Notifications"
+			>
+				🔔
+				<span v-if="unreadCount" class="nav__badge">{{ unreadCount > 9 ? "9+" : unreadCount }}</span>
+			</RouterLink>
 			<RouterLink :to="{ name: 'me' }" class="btn btn-secondary btn-sm">
 				{{ state.user?.user_profile?.name || "Me" }}
 			</RouterLink>
@@ -86,6 +100,28 @@ async function logout() {
 	align-items: center;
 	gap: 0.5rem;
 	margin-left: auto;
+}
+
+.nav__bell {
+	position: relative;
+	padding-left: 0.7rem;
+	padding-right: 0.7rem;
+}
+
+.nav__badge {
+	position: absolute;
+	top: -5px;
+	right: -5px;
+	min-width: 17px;
+	height: 17px;
+	padding: 0 4px;
+	border-radius: 999px;
+	background: var(--danger);
+	color: #fff;
+	font-size: 0.64rem;
+	font-weight: 700;
+	line-height: 17px;
+	text-align: center;
 }
 
 /* Where you are, said by the nav itself. vue-router marks the link whose
