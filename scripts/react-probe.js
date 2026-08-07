@@ -296,6 +296,27 @@ for (const body of messageAttempts) {
 	console.log(`${shown.padEnd(56)} ${verdict(sent)}`);
 }
 
+heading("send_channel_reaction with the fields a paid-reaction client sends");
+
+// The reaction objects carry is_paid and coins_price, and the room carries
+// channel_paid_reactions_*; the flag check may be reading a body field we
+// omit rather than a header. If any of these stops saying "Feature flag",
+// that field is the key.
+const paidAttempts = [
+	{ channel, reaction_id: reactionId, target_user_id: aimAt, is_paid: false },
+	{ channel, reaction_id: reactionId, target_user_id: aimAt, coins_price: 0 },
+	{ channel, reaction_id: reactionId, target_user_id: aimAt, is_paid: false, coins_price: 0 },
+	{ channel, reaction_id: reactionId, target_user_id: aimAt, reaction_type: "emoji" },
+	{ channel, reaction_id: reactionId, target_user_id: aimAt, source: "channel" },
+	{ channel, reaction_id: reactionId, target_user_id: aimAt, channel_id: joined.data.channel_id }
+];
+
+for (const body of paidAttempts) {
+	const sent = await post("/send_channel_reaction", body, working);
+	const extra = Object.keys(body).filter(k => !["channel", "reaction_id", "target_user_id"].includes(k));
+	console.log(`+ ${extra.join(",").padEnd(30)} ${verdict(sent)}`);
+}
+
 heading("other reaction verbs the modern client might use");
 
 // Names worth ruling in or out, sent with the fields send_channel_reaction
