@@ -87,4 +87,17 @@ async function logout() {
 	gap: 0.5rem;
 	margin-left: auto;
 }
+
+/* Where you are, said by the nav itself. vue-router marks the link whose
+   route is active; the pill picks up the accent tint. */
+.nav__actions .router-link-active {
+	background: var(--accent-soft);
+	color: var(--accent);
+	box-shadow: none;
+	font-weight: 700;
+}
+
+:root[data-theme="dark"] .nav__actions .router-link-active {
+	color: var(--text);
+}
 </style>

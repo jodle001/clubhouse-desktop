@@ -32,12 +32,13 @@ defineProps({
 	background: var(--surface);
 	border-radius: 20px;
 	padding: 1rem 1.1rem;
-	box-shadow: var(--shadow);
-	transition: transform 0.12s ease;
+	box-shadow: var(--shadow-sm);
+	transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
 .room-card:hover {
 	transform: translateY(-2px);
+	box-shadow: var(--shadow);
 }
 
 .room-card__topic {
@@ -46,10 +47,19 @@ defineProps({
 	line-height: 1.3;
 }
 
+/* The hallway's overlapping cluster of heads, not a row of gaps. */
 .room-card__people {
 	display: flex;
-	gap: 0.25rem;
 	margin-bottom: 0.5rem;
+}
+
+.room-card__people :deep(.avatar) {
+	border: 2px solid var(--surface);
+	border-radius: 50%;
+}
+
+.room-card__people :deep(.avatar:not(:first-child)) {
+	margin-left: -8px;
 }
 
 .room-card__names {

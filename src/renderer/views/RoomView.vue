@@ -522,6 +522,8 @@ async function send() {
 .room__topic {
 	margin: 0;
 	font-size: 1.35rem;
+	font-weight: 800;
+	letter-spacing: -0.015em;
 }
 
 .room__ever,
@@ -558,9 +560,14 @@ async function send() {
 	gap: 0.6rem;
 	padding: 0.6rem;
 	background: var(--surface);
+	border: 1px solid var(--border);
 	border-radius: 999px;
 	box-shadow: var(--shadow);
 	z-index: 2;
+}
+
+.room__bar .btn {
+	border-radius: 999px;
 }
 
 .room__audio-error {
@@ -646,15 +653,24 @@ async function send() {
 	list-style: none;
 	flex: 1;
 	margin: 0 0 0.75rem;
-	padding: 0.5rem 0.6rem;
+	padding: 0.4rem;
 	display: flex;
 	flex-direction: column;
-	gap: 0.45rem;
+	gap: 0.1rem;
 	overflow-y: auto;
 	overflow-wrap: anywhere;
 	background: var(--surface-2);
 	border-radius: var(--radius-sm);
 	font-size: 0.85rem;
+}
+
+.room__messages li {
+	padding: 0.25rem 0.4rem;
+	border-radius: 8px;
+}
+
+.room__messages li:hover {
+	background: var(--accent-soft);
 }
 
 .room__like {

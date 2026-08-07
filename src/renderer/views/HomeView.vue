@@ -164,11 +164,22 @@ onUnmounted(() => clearInterval(timer));
 	list-style: none;
 	margin: 0;
 	padding: 0;
-	display: grid;
+	display: flex;
+	flex-wrap: wrap;
 	gap: 0.35rem;
-	font-size: 0.85rem;
+	font-size: 0.8rem;
 	color: var(--text-muted);
 	text-transform: capitalize;
+}
+
+/* Chips, like the phone's interest picker - read-only here, but the same
+   shape makes them scan as topics rather than a mystery list. */
+.home__topics li {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	padding: 0.25rem 0.7rem;
+	max-width: 100%;
 }
 
 </style>

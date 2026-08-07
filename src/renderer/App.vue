@@ -23,7 +23,10 @@ const showMini = computed(() => showNav.value && route.name !== "room");
 		<AppNav v-if="showNav" />
 		<main class="app__main">
 			<RouterView v-slot="{ Component }">
-				<component :is="Component" />
+				<!-- Quick enough to feel like polish, not like waiting. -->
+				<Transition name="page" mode="out-in">
+					<component :is="Component" />
+				</Transition>
 			</RouterView>
 		</main>
 		<MiniPlayer v-if="showMini" />
@@ -44,5 +47,19 @@ const showMini = computed(() => showNav.value && route.name !== "room");
 
 .app--chrome .app__main {
 	overflow-y: auto;
+}
+
+.page-enter-active,
+.page-leave-active {
+	transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.page-enter-from {
+	opacity: 0;
+	transform: translateY(4px);
+}
+
+.page-leave-to {
+	opacity: 0;
 }
 </style>

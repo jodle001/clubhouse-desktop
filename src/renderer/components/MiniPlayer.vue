@@ -56,9 +56,14 @@ const canSpeak = computed(() => state.settings.audioEnabled && room.isSpeaker.va
 	max-width: min(560px, calc(100vw - 2rem));
 	padding: 0.5rem 0.9rem;
 	background: var(--surface);
+	border: 1px solid var(--border);
 	border-radius: 999px;
 	box-shadow: var(--shadow);
 	z-index: 50;
+}
+
+.mini .btn {
+	border-radius: 999px;
 }
 
 .mini__topic {
@@ -76,6 +81,13 @@ const canSpeak = computed(() => state.settings.audioEnabled && room.isSpeaker.va
 	height: 8px;
 	border-radius: 50%;
 	background: var(--green, #3ba55d);
+	animation: mini-pulse 2s ease-in-out infinite;
+}
+
+@keyframes mini-pulse {
+	50% {
+		opacity: 0.35;
+	}
 }
 
 .mini__count {
