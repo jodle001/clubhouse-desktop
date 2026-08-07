@@ -96,13 +96,20 @@ async function sendWave() {
 	busy.value = true;
 
 	try {
-		// The contract is exact now (jadx): to_user_profile_id + a source. From
-		// a profile, the source is PROFILE.
+		// The body is exactly the app's (jadx: to_user_profile_id + source), yet
+		// the server refuses it under every identity and every source value with
+		// an empty 400. The wave vocabulary is all presence - online_user_id,
+		// WHOS_ONLINE, initiate_wave - so waving needs Clubhouse's live
+		// "who's online" heartbeat, which this client does not run. Say that,
+		// rather than a blank error.
 		await call("sendWave", profile.value.user_id, "PROFILE");
 		waved.value = true;
 		notify({ type: "success", message: `Waved at ${profile.value.name} 👋` });
-	} catch (err) {
-		notify({ type: "error", message: err.message || "Couldn't send the wave." });
+	} catch {
+		notify({
+			type: "error",
+			message: "Waves need Clubhouse's live presence, which this desktop client doesn't run."
+		});
 	} finally {
 		busy.value = false;
 	}

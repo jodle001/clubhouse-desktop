@@ -88,11 +88,15 @@ field names that travel with it; anything unconfirmed is marked `?`.
 - `get_archived_conversations`, `unarchive_chat`, `search_dm_conversations`
 
 ## Waves
-- `send_wave` **[done]** — `{ to_user_profile_id, source }`; `source` is a
-  `SourceLocation` enum sent as an uppercase string (PROFILE, WAVE,
-  WAVE_AT_FRIENDS, BUDDY_LIST, WHOS_ONLINE, …). Read from the app; every
-  guessed field 400'd because the recipient is `to_user_profile_id` *and* a
-  `source` was required.
+- `send_wave` **[built, presence-gated]** — `{ to_user_profile_id, source }`;
+  `source` is a `SourceLocation` enum sent as an uppercase string (PROFILE,
+  WAVE, WAVE_AT_FRIENDS, BUDDY_LIST, WHOS_ONLINE, …). This is the app's exact
+  body (jadx), yet the server refuses it with an empty 400 under every client
+  identity (2021, current Android, current iOS) and every source value. The
+  wave vocabulary is all presence — `online_user_id`, `WHOS_ONLINE`,
+  `initiate_wave` — so waving requires Clubhouse's live "who's online"
+  heartbeat, which this client does not maintain. Not a payload or version
+  problem; a server-side presence condition no headless client satisfies.
 - `accept_wave` **[done]** — `{ from_user_profile_id, wave_id, source }`;
   returns a room (waving back starts a room together)
 - `cancel_wave` — `{ to_user_profile_id }`; `cancel_waves` takes nothing
