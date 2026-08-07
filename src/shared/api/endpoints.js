@@ -179,6 +179,33 @@ export const endpoints = {
 
 	endChannel: (c, channel) => c.request("/end_channel", { body: { channel } }),
 
+	// --- room polls ---------------------------------------------------
+	// join_channel carries channel_user_poll; these three were confirmed live.
+	// A poll is poll_metadata { poll_id, poll_title, poll_options[{ poll_option_id,
+	// poll_option_title }] } and poll_results { total_votes_text,
+	// poll_option_results[{ poll_option_id, percentage }] }.
+
+	/** The room's current poll, or an empty one. `{ channel }`. */
+	getChannelPoll: (c, channel) => c.request("/get_channel_user_poll", { body: { channel } }),
+
+	/**
+	 * Start a poll. `options` is an array of plain strings; the server took
+	 * `{ channel, title, options }` and 200'd. Titles run 5-80 chars and
+	 * options 5-30, per the room's poll_validation_rules.
+	 */
+	createChannelPoll: (c, { channel, title, options } = {}) =>
+		c.request("/create_channel_user_poll", { body: { channel, title, options } }),
+
+	/**
+	 * Vote. Not /vote_channel_user_poll (that 404s) - the verb is
+	 * submit_channel_user_poll_vote, and it takes the poll and the option by
+	 * their ids. Confirmed by the tally moving from "0 votes" to "1 votes".
+	 */
+	voteChannelPoll: (c, { channel, pollId, pollOptionId } = {}) =>
+		c.request("/submit_channel_user_poll_vote", {
+			body: { channel, poll_id: pollId, poll_option_id: pollOptionId }
+		}),
+
 	// --- room moderation ----------------------------------------------
 	inviteSpeaker: (c, channel, userId) =>
 		c.request("/invite_speaker", { body: { channel, user_id: userId } }),

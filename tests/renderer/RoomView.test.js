@@ -374,6 +374,105 @@ describe("opening a profile from a room", () => {
 	});
 });
 
+describe("the room poll", () => {
+	function joinWithPoll(extra = {}) {
+		bridge.api.joinChannel = vi.fn().mockResolvedValue({
+			ok: true,
+			data: joinResult({
+				is_channel_user_poll_enabled: true,
+				user_capabilities: { can_post_to_chat: true, can_manage_channel_user_poll: true },
+				channel_user_poll: {
+					poll_metadata: {
+						poll_id: "p1",
+						poll_title: "Best fruit?",
+						poll_options: [
+							{ poll_option_id: "a", poll_option_title: "Apples" },
+							{ poll_option_id: "b", poll_option_title: "Oranges" }
+						]
+					},
+					poll_results: {
+						total_votes_text: "3 votes",
+						poll_option_results: [
+							{ poll_option_id: "a", percentage: 67 },
+							{ poll_option_id: "b", percentage: 33 }
+						]
+					},
+					poll_colors: [{ light_hex: "#80DFB3" }]
+				},
+				...extra
+			})
+		});
+		bridge.api.voteChannelPoll = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+		bridge.api.getChannelPoll = vi.fn().mockResolvedValue({
+			ok: true,
+			data: {
+				poll_metadata: {
+					poll_id: "p1",
+					poll_title: "Best fruit?",
+					poll_options: [
+						{ poll_option_id: "a", poll_option_title: "Apples" },
+						{ poll_option_id: "b", poll_option_title: "Oranges" }
+					]
+				},
+				poll_results: {
+					total_votes_text: "4 votes",
+					poll_option_results: [
+						{ poll_option_id: "a", percentage: 75 },
+						{ poll_option_id: "b", percentage: 25 }
+					]
+				}
+			}
+		});
+	}
+
+	it("shows the poll with its options and tally", async () => {
+		joinWithPoll();
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		const poll = wrapper.find(".poll");
+		expect(poll.exists()).toBe(true);
+		expect(poll.text()).toContain("Best fruit?");
+		expect(poll.text()).toContain("Apples");
+		expect(poll.text()).toContain("67%");
+		expect(poll.text()).toContain("3 votes");
+	});
+
+	it("votes for an option on click", async () => {
+		joinWithPoll();
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		await wrapper.findAll(".poll__option")[0].trigger("click");
+		await settle(wrapper);
+
+		expect(bridge.api.voteChannelPoll).toHaveBeenCalledWith({
+			channel: "C1",
+			pollId: "p1",
+			pollOptionId: "a"
+		});
+		// The re-read tally is shown.
+		expect(wrapper.find(".poll").text()).toContain("4 votes");
+	});
+
+	it("offers a moderator a start-a-poll form when none is running", async () => {
+		joinWithPoll({ channel_user_poll: { poll_metadata: null, poll_results: null } });
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		expect(wrapper.find(".poll__form").exists()).toBe(false);
+		await wrapper.find(".poll button").trigger("click");
+		expect(wrapper.find(".poll__form").exists()).toBe(true);
+	});
+
+	it("is absent when the room does not offer polls", async () => {
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		expect(wrapper.find(".poll").exists()).toBe(false);
+	});
+});
+
 describe("reacting at a person", () => {
 	function joinWithPalette() {
 		bridge.api.joinChannel = vi.fn().mockResolvedValue({

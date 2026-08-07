@@ -145,6 +145,110 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		return plain.map(emoji => ({ id: null, emoji }));
 	}
 
+	/**
+	 * The room's poll, or null when there isn't one. Shaped straight from the
+	 * server: metadata { poll_id, poll_title, poll_options[] }, results
+	 * { total_votes_text, poll_option_results[] }, the palette from
+	 * poll_colors, and which option this viewer chose. `voting` guards the
+	 * button while a vote is in flight; `error` shows a refusal in place.
+	 */
+	const poll = reactive({
+		metadata: null,
+		results: null,
+		colors: [],
+		mySelectionId: null,
+		voting: false,
+		error: ""
+	});
+
+	/** Whether the room offers polls, and whether this viewer may start one. */
+	const pollEnabled = computed(() => Boolean(channel.info?.is_channel_user_poll_enabled));
+	const canManagePoll = computed(() => Boolean(capabilities.value.can_manage_channel_user_poll));
+
+	/** Read a poll block (from join_channel or /get_channel_user_poll) into state. */
+	function setPoll(block, { colors } = {}) {
+		poll.metadata = block?.poll_metadata || null;
+		poll.results = block?.poll_results || null;
+		if (Array.isArray(colors)) {
+			poll.colors = colors;
+		}
+	}
+
+	/** Fetch the current poll on demand - after a vote, or a live nudge. */
+	async function loadPoll() {
+		const name = channel.info?.channel;
+		if (!name) {
+			return;
+		}
+
+		try {
+			const result = await call("getChannelPoll", name);
+			setPoll(result);
+		} catch (err) {
+			poll.error = err.message;
+		}
+	}
+
+	/**
+	 * Cast (or change) this viewer's vote. Optimistic on the selection so the
+	 * chosen option lights up at once, then the true tallies are read back -
+	 * percentages are the server's to compute, not ours to guess.
+	 */
+	async function votePoll(pollOptionId) {
+		const name = channel.info?.channel;
+		const pollId = poll.metadata?.poll_id;
+		if (!name || !pollId || !pollOptionId || poll.voting) {
+			return false;
+		}
+
+		poll.voting = true;
+		poll.error = "";
+		const previous = poll.mySelectionId;
+		poll.mySelectionId = pollOptionId;
+
+		try {
+			await call("voteChannelPoll", { channel: name, pollId, pollOptionId });
+			await loadPoll();
+			return true;
+		} catch (err) {
+			poll.mySelectionId = previous;
+			poll.error = err.message;
+			return false;
+		} finally {
+			poll.voting = false;
+		}
+	}
+
+	/**
+	 * Start a poll. Moderator only, and only when none is running. Titles and
+	 * options are trimmed and empties dropped; length is the server's to judge,
+	 * and it names anything it dislikes in `error`.
+	 */
+	async function createPoll(title, optionTexts) {
+		const name = channel.info?.channel;
+		if (!name) {
+			return false;
+		}
+
+		const options = (optionTexts || []).map(t => String(t || "").trim()).filter(Boolean);
+		poll.error = "";
+
+		try {
+			const result = await call("createChannelPoll", { channel: name, title: String(title || "").trim(), options });
+			// The create response carries the fresh poll; fall back to a read
+			// if it did not.
+			if (result?.poll_metadata) {
+				setPoll(result);
+			} else {
+				await loadPoll();
+			}
+			return true;
+		} catch (err) {
+			poll.error = err.message;
+			return false;
+		}
+	}
+
 	let audio = null;
 	let events = null;
 	let pingTimer = null;
@@ -607,6 +711,32 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			});
 
 			/**
+			 * A poll starting, changing or ending, live. The exact action name
+			 * is not documented, so listen for the plausible ones and re-read
+			 * the poll rather than trusting the event to carry its whole shape;
+			 * whichever name actually arrives, the adapter also logs any that
+			 * nothing listens for, which is how the real one surfaces. An event
+			 * that does carry the block is used directly to save a round trip.
+			 */
+			const onPollEvent = event => {
+				if (event?.channel_user_poll?.poll_metadata || event?.poll_metadata) {
+					setPoll(event.channel_user_poll || event);
+				} else {
+					loadPoll();
+				}
+			};
+
+			for (const name of [
+				"channel_user_poll_update",
+				"new_channel_user_poll",
+				"channel_user_poll",
+				"poll_update",
+				"end_channel_user_poll"
+			]) {
+				events.on(name, onPollEvent);
+			}
+
+			/**
 			 * A moderator inviting you onto the stage. This was being dropped
 			 * silently, so raising a hand and being brought up looked exactly
 			 * like raising a hand and being ignored.
@@ -658,6 +788,12 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 
 			reactionOptions.value = parseReactionOptions(info);
 
+			// The poll rides in on join_channel, palette and all; the user's
+			// own record names the option they have already chosen.
+			setPoll(info.channel_user_poll, { colors: info.channel_user_poll?.poll_colors || [] });
+			poll.mySelectionId = mine?.selected_poll_option_id || null;
+			poll.error = "";
+
 			if (chat.enabled) {
 				// After subscribing, so anything said while this was in flight
 				// still arrives; addMessage dedupes by message_id.
@@ -699,6 +835,13 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		reactionOptions.value = [];
 		reactionsBlocked.value = false;
 		loggedReactionEvent = false;
+
+		poll.metadata = null;
+		poll.results = null;
+		poll.colors = [];
+		poll.mySelectionId = null;
+		poll.voting = false;
+		poll.error = "";
 
 		const name = channel.info?.channel;
 
@@ -836,6 +979,12 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		reactionsBlocked,
 		reactionFor,
 		sendReaction,
+		poll,
+		pollEnabled,
+		canManagePoll,
+		loadPoll,
+		votePoll,
+		createPoll,
 		acceptInvite,
 		declineInvite,
 		toggleMute,

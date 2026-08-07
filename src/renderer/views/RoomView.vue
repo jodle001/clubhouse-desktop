@@ -5,6 +5,7 @@ import { useSharedRoom } from "../composables/useRoom.js";
 import { useSession, updateSettings } from "../composables/useSession.js";
 import SpeakerTile from "../components/SpeakerTile.vue";
 import ProfileSheet from "../components/ProfileSheet.vue";
+import PollCard from "../components/PollCard.vue";
 import AppSpinner from "../components/AppSpinner.vue";
 import EmptyState from "../components/EmptyState.vue";
 
@@ -208,6 +209,8 @@ async function send() {
 					</div>
 					<button class="btn btn-danger" @click="exit">Leave quietly ✌️</button>
 				</header>
+
+				<PollCard v-if="room.pollEnabled.value" />
 
 				<section>
 					<h2 class="room__heading">Speakers</h2>
