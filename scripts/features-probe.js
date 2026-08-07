@@ -147,8 +147,18 @@ heading("initiate_wave (empty → names its field)");
 console.log(verdict(await call("/initiate_wave", { body: {} })));
 
 if (userArg && doSend) {
-	heading(`send_wave --user ${userArg} --send (actually waves)`);
-	console.log(verdict(await call("/send_wave", { body: { user_id: userArg } })));
+	heading(`send_wave field ladder at ${userArg} (stops at the first that takes)`);
+	// { user_id } refused with an empty 400 in the app, so walk the recipient
+	// fields the APK offers; the first accepted one names the field and sends
+	// exactly one wave.
+	for (const field of ["recipient_user_id", "to_user_profile_id", "user_profile_id", "to_user_id", "user_id"]) {
+		const res = await call("/send_wave", { body: { [field]: userArg } });
+		console.log(`${field.padEnd(20)} ${verdict(res)}`);
+		if (res.status < 400 && res.data?.success !== false) {
+			console.log(`  -> send_wave takes { ${field} }`);
+			break;
+		}
+	}
 } else if (userArg) {
 	heading(`send_wave at ${userArg} would go here; pass --send to actually wave`);
 }

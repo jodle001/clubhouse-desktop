@@ -840,6 +840,53 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			}
 
 			/**
+			 * A moderator changed the room's chat settings - live, and possibly
+			 * from another device. The event carries the new values, so the
+			 * settings sheet and the chat panel follow without a re-fetch.
+			 */
+			events.on("channel_chat_settings_changed", event => {
+				if (!channel.info) {
+					return;
+				}
+
+				if (typeof event.is_chat_enabled === "boolean") {
+					channel.info.is_chat_enabled = event.is_chat_enabled;
+					chat.enabled = Boolean(channel.info.is_room_chat_available && event.is_chat_enabled);
+					chat.canPost = event.is_chat_enabled
+						? Boolean(channel.info.user_capabilities?.can_post_to_chat) || canModerate.value
+						: false;
+				}
+
+				if (event.chat_permission != null) {
+					channel.info.chat_permission = event.chat_permission;
+				}
+			});
+
+			/**
+			 * The hand-raise settings changed. The event names the queue setting
+			 * and permission, so the sheet reflects them even when the change
+			 * came from elsewhere. (update_handraise_queue_setting is the verb
+			 * that sends it; there is no change_handraise_settings route.)
+			 */
+			events.on("change_handraise_settings", event => {
+				if (!channel.info) {
+					return;
+				}
+
+				if (event.handraise_queue_setting != null) {
+					channel.info.handraise_queue_setting = event.handraise_queue_setting;
+				}
+
+				if (typeof event.is_enabled === "boolean") {
+					channel.info.is_handraise_enabled = event.is_enabled;
+				}
+
+				if (event.handraise_permission != null) {
+					channel.info.handraise_permission = event.handraise_permission;
+				}
+			});
+
+			/**
 			 * A moderator inviting you onto the stage. This was being dropped
 			 * silently, so raising a hand and being brought up looked exactly
 			 * like raising a hand and being ignored.

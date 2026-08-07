@@ -48,10 +48,11 @@ export const endpoints = {
 
 	// --- waves --------------------------------------------------------
 	// The "ping a friend to start a room" gesture. get_received_waves /
-	// get_initiated_waves answer { success, waves }. send_wave's recipient
-	// field was not named on an empty body; user_id is the field every other
-	// user-targeted verb here uses (follow, invite_speaker), so it is the bet.
-	sendWave: (c, userId) => c.request("/send_wave", { body: { user_id: userId } }),
+	// get_initiated_waves answer { success, waves }. send_wave refused
+	// { user_id } with an empty 400 in live testing, so the recipient field is
+	// recipient_user_id - the explicit recipient token in the APK - confirmed
+	// by npm run probe:features -- --user <id> --send.
+	sendWave: (c, userId) => c.request("/send_wave", { body: { recipient_user_id: userId } }),
 	getReceivedWaves: c => c.request("/get_received_waves", { body: {} }),
 	getInitiatedWaves: c => c.request("/get_initiated_waves", { body: {} }),
 	acceptWave: (c, { waveId, userId } = {}) =>

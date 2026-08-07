@@ -331,4 +331,38 @@ describe("room settings", () => {
 		expect(room.roomSettingsError.value).toBe("Not allowed");
 		expect(room.roomSettings.value.chatPermission).toBe(1);
 	});
+
+	it("follows a live chat-settings change over PubNub", async () => {
+		joinRoom();
+		const room = makeRoom();
+		await room.join("C1", { userId: ME });
+		expect(room.chat.enabled).toBe(false);
+
+		room._events.deliver({
+			action: "channel_chat_settings_changed",
+			channel: "C1",
+			is_chat_enabled: true,
+			chat_permission: 2
+		});
+
+		expect(room.roomSettings.value.isChatEnabled).toBe(true);
+		expect(room.roomSettings.value.chatPermission).toBe(2);
+		expect(room.chat.enabled).toBe(true);
+	});
+
+	it("follows a live hand-raise change over PubNub", async () => {
+		joinRoom();
+		const room = makeRoom();
+		await room.join("C1", { userId: ME });
+
+		room._events.deliver({
+			action: "change_handraise_settings",
+			channel: "C1",
+			handraise_queue_setting: 1,
+			is_enabled: true,
+			handraise_permission: 1
+		});
+
+		expect(room.roomSettings.value.handraiseQueueSetting).toBe(1);
+	});
 });
