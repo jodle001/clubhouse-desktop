@@ -98,15 +98,16 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			showReaction(target, { emoji: option.emoji });
 			return true;
 		} catch (err) {
-			// "Feature flag is not enabled" is an account gate, not a payload
-			// or build problem: it fails identically on the 2021 build and on
-			// the current one the server demands, as speaker and as listener.
-			// The account is on the off side of the reaction rollout
-			// (auto-exp-new-listener-reaction-u-i: disabled in /me), which no
-			// header can change. Say so, and retire the picker for this room
-			// rather than failing on every press.
+			// "Feature flag is not enabled" is not the payload (the server
+			// validated reaction_id and target_user_id first) and not the
+			// account either - the same account reacts fine from the phone
+			// app. It fails under both Android identities this client can
+			// claim, so the server is deciding by what the client says it is;
+			// npm run probe:react walks the identity ladder to find which
+			// claim passes. Until then, say so once and retire the picker for
+			// this room rather than failing on every press.
 			if (/feature flag/i.test(err.message)) {
-				chat.error = "Reactions aren't enabled for this account yet.";
+				chat.error = "Clubhouse refuses reactions from this client identity (the account is fine).";
 				reactionsBlocked.value = true;
 			} else {
 				chat.error = err.message;

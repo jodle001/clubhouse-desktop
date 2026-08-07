@@ -255,9 +255,10 @@ describe("emoji over the room", () => {
 		expect(room.chat.error).toBe("Nope");
 	});
 
-	it("retires the picker when the account is not in the reaction rollout", async () => {
-		// "Feature flag is not enabled" is an account gate, not the payload -
-		// no press will succeed, so the button should stop offering.
+	it("retires the picker when the server refuses on its feature flag", async () => {
+		// "Feature flag is not enabled" follows the claimed client identity,
+		// not the payload - the same account reacts fine from the phone. No
+		// press will succeed under this identity, so the button stops offering.
 		joinWith();
 		const room = makeRoom();
 		await room.join("C1", { userId: 9 });
@@ -269,7 +270,7 @@ describe("emoji over the room", () => {
 		await room.sendReaction(room.reactionOptions.value[0]);
 
 		expect(room.reactionsBlocked.value).toBe(true);
-		expect(room.chat.error).toMatch(/enabled for this account/i);
+		expect(room.chat.error).toMatch(/client identity/i);
 	});
 
 	it("clears every floating emoji on leaving", async () => {
