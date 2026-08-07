@@ -270,7 +270,7 @@ describe("emoji over the room", () => {
 		await room.sendReaction(room.reactionOptions.value[0]);
 
 		expect(room.reactionsBlocked.value).toBe(true);
-		expect(room.chat.error).toMatch(/client identity/i);
+		expect(room.chat.error).toMatch(/won't accept reactions from this desktop client/i);
 	});
 
 	it("clears every floating emoji on leaving", async () => {

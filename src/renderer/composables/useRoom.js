@@ -98,16 +98,18 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			showReaction(target, { emoji: option.emoji });
 			return true;
 		} catch (err) {
-			// "Feature flag is not enabled" is not the payload (the server
-			// validated reaction_id and target_user_id first) and not the
-			// account either - the same account reacts fine from the phone
-			// app. It fails under both Android identities this client can
-			// claim, so the server is deciding by what the client says it is;
-			// npm run probe:react walks the identity ladder to find which
-			// claim passes. Until then, say so once and retire the picker for
-			// this room rather than failing on every press.
+			// "Feature flag is not enabled" is a server gate on
+			// send_channel_reaction that nothing in the request moves. The
+			// probe (npm run probe:react) established this thoroughly: the
+			// payload is validated first (reaction_id, target_user_id both
+			// accepted), the account is fine (the same account reacts from the
+			// phone), and the refusal is identical under every claimed identity
+			// - 2021 Android, current Android, current iOS. It is the only
+			// reaction verb the API still routes; the rest 404. Sending is
+			// therefore parked: retire the picker with an honest message.
+			// Receiving is unaffected - others' reactions and gifs still show.
 			if (/feature flag/i.test(err.message)) {
-				chat.error = "Clubhouse refuses reactions from this client identity (the account is fine).";
+				chat.error = "Clubhouse won't accept reactions from this desktop client. You'll still see others' reactions.";
 				reactionsBlocked.value = true;
 			} else {
 				chat.error = err.message;
