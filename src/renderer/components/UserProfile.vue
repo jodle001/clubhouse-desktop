@@ -94,14 +94,20 @@ async function sendWave() {
 	}
 
 	busy.value = true;
-	const result = await run("sendWave", profile.value.user_id);
 
-	if (result) {
+	try {
+		// call(), not run(): send_wave refuses with an empty error message, so
+		// the generic reporter would show a blank toast. The recipient field is
+		// still unconfirmed (every candidate 400s), so a failure is stated
+		// plainly rather than as an empty error or a fake success.
+		await call("sendWave", profile.value.user_id);
 		waved.value = true;
 		notify({ type: "success", message: `Waved at ${profile.value.name} 👋` });
+	} catch {
+		notify({ type: "error", message: "Couldn't send the wave — waving isn't working from this client yet." });
+	} finally {
+		busy.value = false;
 	}
-
-	busy.value = false;
 }
 
 async function load() {
