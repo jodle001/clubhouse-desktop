@@ -18,14 +18,48 @@ import EmptyState from "../components/EmptyState.vue";
 
 const props = defineProps({ id: { type: String, required: true } });
 
-const { run, loading } = useApi();
+const { run, call, loading } = useApi();
 const data = ref(null);
 
 const convo = computed(() => data.value || null);
 const segments = computed(() => data.value?.segments || []);
 
+const draft = ref("");
+const sending = ref(false);
+const replyError = ref("");
+/** Set if the server version-gates posting, so the composer retires. */
+const replyGated = ref(false);
+
 async function load() {
 	data.value = await run("getConversation", props.id);
+	// Clear the thread's unread mark now it is on screen; harmless if it fails.
+	call("markConversationRead", props.id).catch(() => {});
+}
+
+async function reply() {
+	const text = draft.value.trim();
+	if (!text || sending.value) {
+		return;
+	}
+
+	sending.value = true;
+	replyError.value = "";
+
+	try {
+		await call("sendConversationSegment", { conversationId: props.id, text });
+		draft.value = "";
+		await load();
+	} catch (err) {
+		// The same version gate that blocks creating a conversation may block
+		// posting; say so once and retire the box rather than failing on send.
+		if (/upgrade|new chat/i.test(err.message)) {
+			replyGated.value = true;
+		} else {
+			replyError.value = err.message;
+		}
+	} finally {
+		sending.value = false;
+	}
 }
 
 /** The text of a post: what was typed, or the caption on a voice note. */
@@ -100,6 +134,21 @@ onMounted(load);
 					</div>
 				</li>
 			</ul>
+
+			<form v-if="!replyGated" class="reply" @submit.prevent="reply">
+				<input
+					v-model="draft"
+					class="reply__input"
+					placeholder="Write a reply…"
+					aria-label="Reply"
+					maxlength="1000"
+				>
+				<button class="btn" type="submit" :disabled="!draft.trim() || sending">Send</button>
+			</form>
+			<p v-else class="muted reply__gated">
+				Replying needs the latest Clubhouse app — this thread is read-only here.
+			</p>
+			<p v-if="replyError" class="error-box reply__error">{{ replyError }}</p>
 
 			<a v-if="convo.share_url" :href="convo.share_url" class="btn btn-secondary open-web">
 				Open on Clubhouse ↗
@@ -198,7 +247,28 @@ onMounted(load);
 	max-width: 260px;
 }
 
-.open-web {
+.reply {
+	display: flex;
+	gap: 0.5rem;
 	margin-top: 1.5rem;
+}
+
+.reply__input {
+	flex: 1;
+	min-width: 0;
+}
+
+.reply__gated {
+	margin-top: 1.5rem;
+	font-size: 0.82rem;
+	text-align: center;
+}
+
+.reply__error {
+	margin-top: 0.75rem;
+}
+
+.open-web {
+	margin-top: 1rem;
 }
 </style>

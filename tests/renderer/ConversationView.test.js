@@ -118,4 +118,45 @@ describe("ConversationView", () => {
 
 		expect(wrapper.text()).toContain("Nothing has been said here yet.");
 	});
+
+	it("marks the thread read when opened", async () => {
+		bridge.api.markConversationRead = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+
+		const wrapper = mountView();
+		await settle(wrapper);
+
+		expect(bridge.api.markConversationRead).toHaveBeenCalledWith("abc");
+	});
+
+	it("posts a reply and reloads the thread", async () => {
+		bridge.api.sendConversationSegment = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+
+		const wrapper = mountView();
+		await settle(wrapper);
+
+		await wrapper.find(".reply__input").setValue("well said");
+		await wrapper.find(".reply").trigger("submit");
+		await settle(wrapper);
+
+		expect(bridge.api.sendConversationSegment).toHaveBeenCalledWith({ conversationId: "abc", text: "well said" });
+		// Reloaded after posting: getConversation called on mount and again after.
+		expect(bridge.api.getConversation).toHaveBeenCalledTimes(2);
+	});
+
+	it("retires the composer when replying is version-gated", async () => {
+		bridge.api.sendConversationSegment = vi.fn().mockResolvedValue({
+			ok: false,
+			error: { message: "Please upgrade your app to use new chat", status: 400 }
+		});
+
+		const wrapper = mountView();
+		await settle(wrapper);
+
+		await wrapper.find(".reply__input").setValue("hi");
+		await wrapper.find(".reply").trigger("submit");
+		await settle(wrapper);
+
+		expect(wrapper.find(".reply").exists()).toBe(false);
+		expect(wrapper.text()).toMatch(/read-only here/);
+	});
 });

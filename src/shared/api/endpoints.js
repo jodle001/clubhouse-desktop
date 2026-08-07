@@ -38,6 +38,14 @@ export const endpoints = {
 	 */
 	getActivities: (c, { cursor } = {}) => c.request("/get_activities", { body: { cursor } }),
 
+	/**
+	 * The discovery feed - collections of houses to explore, the closest thing
+	 * to a public directory the API offers (the live-room hallway stays
+	 * follow-driven). Answers { items: [{ social_club_collection: { title,
+	 * items } }] }; the club shape inside is read defensively.
+	 */
+	getDiscoveryFeed: (c, { cursor } = {}) => c.request("/get_discovery_feed", { body: { cursor } }),
+
 	// --- waves --------------------------------------------------------
 	// The "ping a friend to start a room" gesture. get_received_waves /
 	// get_initiated_waves answer { success, waves }. send_wave's recipient
@@ -62,6 +70,22 @@ export const endpoints = {
 	/** One thread's detail. Named `conversation_id` itself, on a 400. */
 	getConversation: (c, conversationId) =>
 		c.request("/get_conversation", { body: { conversation_id: conversationId } }),
+
+	/**
+	 * Post a reply to a thread. add_conversation_segment named conversation_id
+	 * on an empty body; the text field is unconfirmed, so the message rides in
+	 * under both `text` and `user_text` (the field the segments render from) -
+	 * unknown fields are ignored. Creating a *new* conversation is version-gated
+	 * ("please upgrade your app"), but replying to an existing one is not.
+	 */
+	sendConversationSegment: (c, { conversationId, text } = {}) =>
+		c.request("/add_conversation_segment", {
+			body: { conversation_id: conversationId, text, user_text: text }
+		}),
+
+	/** Mark a thread read, so its new-segments dot clears. */
+	markConversationRead: (c, conversationId) =>
+		c.request("/mark_conversation_as_read", { body: { conversation_id: conversationId } }),
 
 	updateName: (c, name) => c.request("/update_name", { body: { name } }),
 

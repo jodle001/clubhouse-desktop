@@ -45,6 +45,7 @@ async function logout() {
 		</form>
 
 		<nav class="nav__actions">
+			<RouterLink :to="{ name: 'discover' }" class="btn btn-secondary btn-sm">Discover</RouterLink>
 			<RouterLink :to="{ name: 'conversations' }" class="btn btn-secondary btn-sm">Chats</RouterLink>
 			<RouterLink :to="{ name: 'people' }" class="btn btn-secondary btn-sm">People</RouterLink>
 			<RouterLink
