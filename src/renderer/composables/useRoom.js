@@ -821,30 +821,55 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			});
 
 			/**
-			 * A poll starting, changing or ending, live. The exact action name
-			 * is not documented, so listen for the plausible ones and re-read
-			 * the poll rather than trusting the event to carry its whole shape;
-			 * whichever name actually arrives, the adapter also logs any that
-			 * nothing listens for, which is how the real one surfaces. An event
-			 * that does carry the block is used directly to save a round trip.
+			 * Live poll events, by the names the room actually sends (seen in a
+			 * verbose log): _created when one starts, _result_updated when the
+			 * tally moves, _voted per vote, _ended when it closes. A created
+			 * event carries only the poll_id, so fetch the whole poll; a
+			 * result_updated carries poll_results inline, so patch in place.
 			 */
-			const onPollEvent = event => {
-				if (event?.channel_user_poll?.poll_metadata || event?.poll_metadata) {
-					setPoll(event.channel_user_poll || event);
+			events.on("channel_user_poll_created", () => loadPoll());
+
+			events.on("channel_user_poll_result_updated", event => {
+				if (event?.poll_results) {
+					poll.results = event.poll_results;
 				} else {
 					loadPoll();
 				}
-			};
+			});
 
-			for (const name of [
-				"channel_user_poll_update",
-				"new_channel_user_poll",
-				"channel_user_poll",
-				"poll_update",
-				"end_channel_user_poll"
-			]) {
-				events.on(name, onPollEvent);
-			}
+			events.on("channel_user_poll_voted", event => {
+				// Only the viewer's own vote moves their selection; everyone
+				// else's is reflected by the result tally.
+				if (event?.user_id === info.user_profile_id && event.poll_option_id) {
+					poll.mySelectionId = event.poll_option_id;
+				}
+			});
+
+			events.on("channel_user_poll_ended", () => {
+				poll.metadata = null;
+				poll.results = null;
+				poll.mySelectionId = null;
+			});
+
+			/**
+			 * The room revised what this viewer may do - promoted to moderator,
+			 * granted chat, and so on. The event carries the can_* flags at the
+			 * top level; merging them keeps canModerate, the settings gear and
+			 * the mod tools live instead of a stale join-time snapshot.
+			 */
+			events.on("update_user_capabilities", event => {
+				if (!channel.info) {
+					return;
+				}
+
+				const merged = { ...channel.info.user_capabilities };
+				for (const [key, value] of Object.entries(event)) {
+					if (key.startsWith("can_")) {
+						merged[key] = value;
+					}
+				}
+				channel.info.user_capabilities = merged;
+			});
 
 			/**
 			 * A moderator changed the room's chat settings - live, and possibly

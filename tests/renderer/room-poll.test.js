@@ -180,7 +180,9 @@ describe("room polls", () => {
 		expect(room.poll.metadata.poll_title).toBe("Tea or coffee?");
 	});
 
-	it("refreshes on a live poll event, and drops the poll on leaving", async () => {
+	it("fetches the poll when one is created live, and drops it on leaving", async () => {
+		// channel_user_poll_created carries only the poll_id, so the whole poll
+		// is fetched.
 		bridge.api.getChannelPoll = vi.fn().mockResolvedValue({
 			ok: true,
 			data: pollBlock({
@@ -194,8 +196,7 @@ describe("room polls", () => {
 		const room = makeRoom();
 		await room.join("C1", { userId: ME });
 
-		room._events.deliver({ action: "channel_user_poll_update", channel: "C1" });
-		// The handler re-reads asynchronously.
+		room._events.deliver({ action: "channel_user_poll_created", channel: "C1", poll_id: "b5cf0afb" });
 		await Promise.resolve();
 		await Promise.resolve();
 
@@ -205,6 +206,68 @@ describe("room polls", () => {
 		await room.leave();
 		expect(room.poll.metadata).toBeNull();
 		expect(room.poll.colors).toEqual([]);
+	});
+
+	it("patches the tally in place from a live result update, no refetch", async () => {
+		bridge.api.getChannelPoll = vi.fn();
+
+		const room = makeRoom();
+		await room.join("C1", { userId: ME });
+
+		room._events.deliver({
+			action: "channel_user_poll_result_updated",
+			channel: "C1",
+			poll_results: {
+				total_votes_text: "7 votes",
+				poll_option_results: [{ poll_option_id: "opt-apple", percentage: 71 }]
+			}
+		});
+
+		expect(room.poll.results.total_votes_text).toBe("7 votes");
+		// The event carried the results, so no fetch was needed.
+		expect(bridge.api.getChannelPoll).not.toHaveBeenCalled();
+	});
+
+	it("moves the viewer's own selection when their vote echoes back", async () => {
+		const room = makeRoom();
+		await room.join("C1", { userId: ME });
+
+		room._events.deliver({
+			action: "channel_user_poll_voted",
+			channel: "C1",
+			user_id: ME,
+			poll_option_id: "opt-banana"
+		});
+
+		expect(room.poll.mySelectionId).toBe("opt-banana");
+	});
+
+	it("follows a live capability change over PubNub", async () => {
+		bridge.api.joinChannel = vi.fn().mockResolvedValue({
+			ok: true,
+			data: {
+				success: true,
+				channel: "C1",
+				topic: "MyRoom",
+				user_profile_id: ME,
+				users: [{ user_id: ME, name: "Me" }],
+				user_capabilities: { can_disable_room_chat: false }
+			}
+		});
+
+		const room = makeRoom();
+		await room.join("C1", { userId: ME });
+		expect(room.capabilities.value.can_disable_room_chat).toBe(false);
+
+		room._events.deliver({
+			action: "update_user_capabilities",
+			channel: "C1",
+			can_disable_room_chat: true,
+			can_edit_room_title: true
+		});
+
+		expect(room.capabilities.value.can_disable_room_chat).toBe(true);
+		expect(room.capabilities.value.can_edit_room_title).toBe(true);
 	});
 });
 
