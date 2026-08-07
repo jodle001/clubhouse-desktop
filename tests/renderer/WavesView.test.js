@@ -3,6 +3,9 @@ import { mount } from "@vue/test-utils";
 import WavesView from "@/views/WavesView.vue";
 import { stubBridge } from "../setup.js";
 
+const push = vi.fn();
+vi.mock("vue-router", () => ({ useRouter: () => ({ push }) }));
+
 let bridge;
 
 const settle = async wrapper => {
@@ -11,6 +14,7 @@ const settle = async wrapper => {
 };
 
 beforeEach(() => {
+	push.mockClear();
 	bridge = stubBridge();
 	bridge.api.getReceivedWaves = vi.fn().mockResolvedValue({ ok: true, data: { waves: [] } });
 	bridge.api.getInitiatedWaves = vi.fn().mockResolvedValue({ ok: true, data: { waves: [] } });
@@ -43,9 +47,25 @@ describe("WavesView", () => {
 		await wrapper.find(".wave .btn").trigger("click");
 		await settle(wrapper);
 
-		expect(bridge.api.acceptWave).toHaveBeenCalledWith({ waveId: "w1", userId: 5 });
+		expect(bridge.api.acceptWave).toHaveBeenCalledWith({ userId: 5, waveId: "w1", source: "WAVE" });
 		// Accepted waves leave the received list.
 		expect(wrapper.findAll(".wave")).toHaveLength(0);
+	});
+
+	it("joins the room a wave-back returns", async () => {
+		bridge.api.getReceivedWaves = vi.fn().mockResolvedValue({
+			ok: true,
+			data: { waves: [{ wave_id: "w1", user_profile: { user_id: 5, name: "Bea" } }] }
+		});
+		bridge.api.acceptWave = vi.fn().mockResolvedValue({ ok: true, data: { success: true, channel: "R1" } });
+
+		const wrapper = mount(WavesView, { global: { stubs: { AppAvatar: true } } });
+		await settle(wrapper);
+
+		await wrapper.find(".wave .btn").trigger("click");
+		await settle(wrapper);
+
+		expect(push).toHaveBeenCalledWith({ name: "room", params: { channel: "R1" } });
 	});
 
 	it("reads the sender across the fields a wave might use", async () => {

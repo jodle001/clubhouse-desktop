@@ -231,7 +231,7 @@ describe("ProfileView", () => {
 		await waveBtn.trigger("click");
 		await settle(wrapper);
 
-		expect(bridge.api.sendWave).toHaveBeenCalledWith(THEM);
+		expect(bridge.api.sendWave).toHaveBeenCalledWith(THEM, "PROFILE");
 		expect(wrapper.findAll(".profile__actions button").find(b => /Waved/.test(b.text()))).toBeTruthy();
 	});
 

@@ -6,12 +6,14 @@
  * fields, and a wave that carries neither still renders as a plain row.
  */
 import { onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import { useApi } from "../composables/useApi.js";
 import AppAvatar from "../components/AppAvatar.vue";
 import AppSpinner from "../components/AppSpinner.vue";
 import EmptyState from "../components/EmptyState.vue";
 
 const { run } = useApi();
+const router = useRouter();
 
 const received = ref([]);
 const initiated = ref([]);
@@ -40,8 +42,15 @@ async function accept(wave) {
 	const key = waveId(wave) ?? person.user_id;
 	busy.value = { ...busy.value, [key]: true };
 
-	if (await run("acceptWave", { waveId: waveId(wave), userId: person.user_id })) {
+	// accept_wave returns a room to join together; go straight into it when it
+	// does. source is WAVE - we are answering from the waves inbox.
+	const result = await run("acceptWave", { userId: person.user_id, waveId: waveId(wave), source: "WAVE" });
+	if (result) {
 		received.value = received.value.filter(w => w !== wave);
+		const channel = result.channel || result.channel_id;
+		if (channel) {
+			router.push({ name: "room", params: { channel: result.channel || String(result.channel_id) } });
+		}
 	}
 
 	const next = { ...busy.value };

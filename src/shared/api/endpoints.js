@@ -47,17 +47,19 @@ export const endpoints = {
 	getDiscoveryFeed: (c, { cursor } = {}) => c.request("/get_discovery_feed", { body: { cursor } }),
 
 	// --- waves --------------------------------------------------------
-	// The "ping a friend to start a room" gesture. get_received_waves /
-	// get_initiated_waves answer { success, waves }. send_wave refused
-	// { user_id } with an empty 400 in live testing, so the recipient field is
-	// recipient_user_id - the explicit recipient token in the APK - confirmed
-	// by npm run probe:features -- --user <id> --send.
-	sendWave: (c, userId) => c.request("/send_wave", { body: { recipient_user_id: userId } }),
+	// The "ping a friend to start a room" gesture. The exact contract was read
+	// from the app (jadx): SendWaveRequest is { to_user_profile_id, source },
+	// where source is a SourceLocation enum sent as an uppercase string
+	// ("PROFILE", "WAVE", ...). Every guessed field failed because the recipient
+	// is to_user_profile_id AND a source was missing. accept_wave returns a room
+	// (RemoteChannelInRoomWithAccess) - waving back starts a room together.
+	sendWave: (c, userId, source = "PROFILE") =>
+		c.request("/send_wave", { body: { to_user_profile_id: userId, source } }),
 	getReceivedWaves: c => c.request("/get_received_waves", { body: {} }),
 	getInitiatedWaves: c => c.request("/get_initiated_waves", { body: {} }),
-	acceptWave: (c, { waveId, userId } = {}) =>
-		c.request("/accept_wave", { body: { wave_id: waveId, user_id: userId } }),
-	cancelWave: (c, userId) => c.request("/cancel_wave", { body: { user_id: userId } }),
+	acceptWave: (c, { userId, waveId, source = "WAVE" } = {}) =>
+		c.request("/accept_wave", { body: { from_user_profile_id: userId, wave_id: waveId, source } }),
+	cancelWave: (c, userId) => c.request("/cancel_wave", { body: { to_user_profile_id: userId } }),
 
 	// --- conversations ------------------------------------------------
 	/**

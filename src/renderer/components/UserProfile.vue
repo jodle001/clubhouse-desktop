@@ -96,15 +96,13 @@ async function sendWave() {
 	busy.value = true;
 
 	try {
-		// call(), not run(): send_wave refuses with an empty error message, so
-		// the generic reporter would show a blank toast. The recipient field is
-		// still unconfirmed (every candidate 400s), so a failure is stated
-		// plainly rather than as an empty error or a fake success.
-		await call("sendWave", profile.value.user_id);
+		// The contract is exact now (jadx): to_user_profile_id + a source. From
+		// a profile, the source is PROFILE.
+		await call("sendWave", profile.value.user_id, "PROFILE");
 		waved.value = true;
 		notify({ type: "success", message: `Waved at ${profile.value.name} 👋` });
-	} catch {
-		notify({ type: "error", message: "Couldn't send the wave — waving isn't working from this client yet." });
+	} catch (err) {
+		notify({ type: "error", message: err.message || "Couldn't send the wave." });
 	} finally {
 		busy.value = false;
 	}

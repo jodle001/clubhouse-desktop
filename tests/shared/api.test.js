@@ -152,6 +152,30 @@ describe("endpoints", () => {
 		expect(JSON.parse(transport.mock.calls[1][1].body)).toMatchObject({ privacy_level: "SOCIAL" });
 	});
 
+	it("sends a wave with the fields the app uses: to_user_profile_id and source", async () => {
+		// Read from the app (jadx): SendWaveRequest is { to_user_profile_id,
+		// source }. Every other field guess 400'd with an empty error.
+		const transport = fakeTransport({ success: true });
+		const api = createApi(makeClient(transport));
+
+		await api.sendWave(555);
+		expect(JSON.parse(transport.mock.calls[0][1].body)).toEqual({ to_user_profile_id: 555, source: "PROFILE" });
+
+		await api.sendWave(555, "WAVE_AT_FRIENDS");
+		expect(JSON.parse(transport.mock.calls[1][1].body)).toMatchObject({ source: "WAVE_AT_FRIENDS" });
+	});
+
+	it("accepts a wave with from_user_profile_id, wave_id and source", async () => {
+		const transport = fakeTransport({ success: true });
+		await createApi(makeClient(transport)).acceptWave({ userId: 5, waveId: "w1" });
+
+		expect(JSON.parse(transport.mock.calls[0][1].body)).toEqual({
+			from_user_profile_id: 5,
+			wave_id: "w1",
+			source: "WAVE"
+		});
+	});
+
 	it("exposes every endpoint as a bound function", () => {
 		const api = createApi(makeClient(fakeTransport({})));
 		for (const name of ["me", "getFeed", "joinChannel", "leaveChannel", "searchUsers"]) {

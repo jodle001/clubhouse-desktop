@@ -88,9 +88,18 @@ field names that travel with it; anything unconfirmed is marked `?`.
 - `get_archived_conversations`, `unarchive_chat`, `search_dm_conversations`
 
 ## Waves
-- `send_wave`, `initiate_wave`, `accept_wave`, `cancel_wave` / `cancel_waves`,
-  `suspend_wave` / `suspend_sent_wave` / `unsuspend_sent_wave`,
-  `get_received_waves`, `get_initiated_waves`
+- `send_wave` **[done]** — `{ to_user_profile_id, source }`; `source` is a
+  `SourceLocation` enum sent as an uppercase string (PROFILE, WAVE,
+  WAVE_AT_FRIENDS, BUDDY_LIST, WHOS_ONLINE, …). Read from the app; every
+  guessed field 400'd because the recipient is `to_user_profile_id` *and* a
+  `source` was required.
+- `accept_wave` **[done]** — `{ from_user_profile_id, wave_id, source }`;
+  returns a room (waving back starts a room together)
+- `cancel_wave` — `{ to_user_profile_id }`; `cancel_waves` takes nothing
+- `get_received_waves` **[done]**, `get_initiated_waves` **[done]** —
+  `{ success, waves }`
+- `initiate_wave` (404 on this build), `suspend_wave` / `suspend_sent_wave` /
+  `unsuspend_sent_wave`
 
 ## Follows & people
 - `follow` **[done]**, `unfollow` **[done]**, `block` **[done]**, `unblock` **[done]**,
