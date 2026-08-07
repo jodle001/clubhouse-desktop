@@ -24,6 +24,7 @@
     "doctor": "node scripts/doctor.js",
     "probe": "node scripts/probe.js",
     "probe:react": "node scripts/react-probe.js",
+    "probe:poll": "node scripts/poll-probe.js",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder --macos --linux --windows",
     "dist:linux": "npm run build && electron-builder --linux",
