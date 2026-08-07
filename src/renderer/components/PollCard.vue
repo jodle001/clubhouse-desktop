@@ -49,9 +49,15 @@ function addOption() {
 	}
 }
 
-const canSubmit = computed(
-	() => title.value.trim().length >= 5 && draftOptions.value.filter(o => o.trim().length >= 5).length >= 2
-);
+/**
+ * Enough to send: a question and at least two options with something in them.
+ * The room reports an option_characters_min of 5, but that is advisory - real
+ * polls run "Yes"/"No" - so length is left to the server, which names anything
+ * it dislikes in poll.error rather than a button that refuses without saying
+ * why.
+ */
+const filledOptions = computed(() => draftOptions.value.filter(o => o.trim().length));
+const canSubmit = computed(() => title.value.trim().length > 0 && filledOptions.value.length >= 2);
 
 async function submit() {
 	if (await room.createPoll(title.value, draftOptions.value)) {
@@ -134,6 +140,7 @@ async function submit() {
 					>
 						＋ Option
 					</button>
+					<span v-if="!canSubmit" class="poll__hint muted">A question and two options.</span>
 					<span class="grow" />
 					<button class="btn btn-secondary btn-sm" type="button" @click="composing = false">Cancel</button>
 					<button class="btn btn-sm" type="submit" :disabled="!canSubmit">Start</button>
@@ -246,6 +253,10 @@ async function submit() {
 	display: flex;
 	align-items: center;
 	gap: 0.4rem;
+}
+
+.poll__hint {
+	font-size: 0.76rem;
 }
 
 .poll__error {

@@ -465,6 +465,38 @@ describe("the room poll", () => {
 		expect(wrapper.find(".poll__form").exists()).toBe(true);
 	});
 
+	it("lets a Yes/No poll start - short options are not blocked", async () => {
+		// The room reports an option minimum of 5, but that is advisory; a
+		// two-letter "No" must not disable the button, and the server is left
+		// to judge lengths.
+		joinWithPoll({ channel_user_poll: { poll_metadata: null, poll_results: null } });
+		bridge.api.createChannelPoll = vi.fn().mockResolvedValue({
+			ok: true,
+			data: { poll_metadata: { poll_id: "n1", poll_title: "Is it Friday?", poll_options: [] }, poll_results: null }
+		});
+
+		const wrapper = mountRoom();
+		await settle(wrapper);
+		await wrapper.find(".poll button").trigger("click");
+
+		const start = () => wrapper.findAll(".poll__form button").at(-1);
+		expect(start().attributes("disabled")).toBeDefined();
+
+		const inputs = wrapper.findAll(".poll__input");
+		await inputs[0].setValue("Is it Friday?");
+		await inputs[1].setValue("Yes");
+		await inputs[2].setValue("No");
+
+		expect(start().attributes("disabled")).toBeUndefined();
+
+		await wrapper.find(".poll__form").trigger("submit");
+		expect(bridge.api.createChannelPoll).toHaveBeenCalledWith({
+			channel: "C1",
+			title: "Is it Friday?",
+			options: ["Yes", "No"]
+		});
+	});
+
 	it("is absent when the room does not offer polls", async () => {
 		const wrapper = mountRoom();
 		await settle(wrapper);
