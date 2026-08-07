@@ -44,6 +44,21 @@ npm run probe      # ask the live API which endpoints still exist
 npm run dist:linux # AppImage, .deb and .rpm into dist/
 ```
 
+Reverse-engineering tools, used to build against the current API rather than
+the retired 2021 one. All read-only — they inspect a downloaded APK or your own
+signed-in session and send nothing on your behalf:
+
+```sh
+npm run endpoints -- <clubhouse.apk>          # list every endpoint in the app
+npm run decompile -- <clubhouse.apk> <name>   # read one endpoint's exact request shape
+npm run probe:features                        # shape the DM/wave/notification/discovery responses
+npm run probe:poll     -- --channel <id>      # the room-poll contract
+npm run probe:settings -- --channel <id>      # the room-settings verbs
+```
+
+`docs/api-endpoints.md` is the result: the whole current surface, grouped by
+feature, with what this client implements and what the server blocks.
+
 ## How it is put together
 
 ```
@@ -125,16 +140,49 @@ flags 2576 as a *mandatory* update (`is_mandatory: true`), so `android-current`
 is the safer place to be — it is opt-in only because 2576 is the build known to
 deliver a fresh sign-in code, and that path is untested on the newer one.
 
-**Not everything gated is gated on the build, though.** Room reactions answer
-`Feature flag is not enabled` on *both* builds, as speaker and as listener — the
-gate is a per-account server experiment (`auto-exp-new-listener-reaction-u-i` in
-`/me`), on the off side of the rollout for this account, which no header can
-flip. `/create_conversation`'s "please upgrade your app" may be the same kind of
-account gate rather than a build one. So a newer build is worth claiming for
-what it *is* mandatory for, but it is not a key to feature flags.
+**A newer build is not a key to everything, though.** Some features are
+refused no matter which build is claimed — see **Known limitations** below for
+what is blocked and why.
 
 Requesting codes repeatedly makes this worse, not better; Clubhouse throttles
 by number. Leave twenty minutes between rounds of testing.
+
+## Known limitations
+
+Three features are built into the UI but the server refuses them, and no change
+this client can make gets past the refusal. Each was confirmed by sending the
+*exact* request the official app sends (its endpoints and request shapes were
+read straight out of the Android app — see `docs/api-endpoints.md`) and still
+being refused. They degrade gracefully: the control stays, and it explains
+plainly why it did not work rather than failing silently.
+
+- **Sending reactions.** `send_channel_reaction` answers `Feature flag is not
+  enabled` under every identity we can claim (2021 Android, current Android,
+  current iOS). It is **not** an account restriction — the same account reacts
+  fine from the official iOS app. The likely reason is that Clubhouse only
+  accepts reactions from a genuine, hardware-attested app (Apple App Attest /
+  Play Integrity), which a desktop client cannot forge. *Receiving* reactions —
+  other people's emoji and GIFs — works fully.
+
+- **Starting a new DM.** `create_conversation` answers *"please upgrade your
+  app… new chat changes"* — a version cutoff that blocks older clients from
+  opening a brand-new conversation. *Reading* existing Chats threads and
+  *replying* to them both work; only creating a new one is blocked. (This one
+  is worth a retest under the `android-current` identity — it was only ever hit
+  on the 2021 build.)
+
+- **Sending a wave.** `send_wave` takes exactly the body the app sends
+  (`{ to_user_profile_id, source }`, read from the app), yet answers an empty
+  `400` under every identity and every `source` value. The wave vocabulary is
+  all live presence (`online_user_id`, `WHOS_ONLINE`, `initiate_wave`), so
+  waving needs Clubhouse's real-time "who's online" heartbeat, which this
+  client does not maintain. Building that (over the PubNub link the room
+  already uses) is possible but was left out of scope. *Receiving* waves works.
+
+The one thing that would turn any of these from "likely" to "certain" is
+capturing what the official phone app actually sends on the wire. That is out
+of scope here, so these are documented as known blocks rather than left as open
+threads.
 
 ## Verbose logging
 
@@ -153,6 +201,11 @@ parses its own arguments and rejects unknown ones.
 
 ## The 2021 API is partly gone
 
+> The complete, current API surface — every endpoint and request shape, read
+> straight out of the official Android app — lives in
+> [`docs/api-endpoints.md`](docs/api-endpoints.md). That is the source of truth;
+> the table below is the original 2021-era investigation, kept for the reasoning.
+
 Clubhouse retired the "hallway" this app was built around, and every public
 description of its API predates that. Several endpoints now answer a plain-text
 `404 Not found` - not an error the app can interpret, but a path that is not
@@ -164,7 +217,7 @@ routed at all.
 | `/get_channels` | gone, replaced by `/get_feed_v3` |
 | `/get_online_friends` | gone, no known replacement |
 | `/get_events` | gone, no known replacement |
-| `/get_notifications` | gone, no known replacement |
+| `/get_notifications` | gone — replaced by `POST /get_activities` (the activity feed) |
 | `/get_following`, `/get_followers` | gone, no known replacement |
 | `/get_profile`, `/search_users` | fine |
 | `GET /get_suggested_follows_all` | alive - people to follow, paginated |
@@ -176,12 +229,12 @@ routed at all.
 | stepping down (8 names tried) | all gone; see below |
 | `POST /uninvite_speaker` | alive - `{ channel, user_id }` |
 | `POST /get_channel` | alive - one room's state, `{ channel }` |
-| discovery/explore/search-channels (14 names tried) | all gone |
+| discovery/explore/search-channels (14 names tried) | all gone — but `POST /get_discovery_feed` exists (collections of houses, not live rooms) |
 | `POST /get_blocked_users` | alive |
 | `POST /send_channel_message` | alive - `{ channel, message }` |
 | `GET /get_channel_messages` | alive - chat history, `?channel=`, paginated by `cursor` |
 | `GET /get_chat_messages` | exists, but rejects everything tried |
-| `POST /send_channel_reaction` | alive - emoji over the room |
+| `POST /send_channel_reaction` | routed, but refused — see Known limitations (receiving works) |
 | `POST /like_channel_message`, `/unlike_channel_message` | alive - `{ channel, message_id }` |
 | `POST /get_conversations` | alive - the Chats feed, `{ conversations, next_cursor }` |
 | `POST /get_conversation` | alive - one thread with its segments, `{ conversation_id }` |
@@ -189,7 +242,7 @@ routed at all.
 | `POST /invite_speaker`, `/uninvite_speaker` | alive - `{ channel, user_id }` |
 | `POST /mute_speaker`, `/make_moderator` | alive - `{ channel, user_id }` |
 | `POST /create_channel` | alive - needs `privacy` (open/social/closed), not just the old flags |
-| `POST /send_wave` | alive |
+| `POST /send_wave` | routed, but refused — needs live presence, see Known limitations |
 | `POST /get_channel_user_poll` | alive - `{ channel }` |
 | `POST /create_channel_user_poll` | alive, wants parameters |
 

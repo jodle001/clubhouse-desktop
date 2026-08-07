@@ -63,9 +63,12 @@ field names that travel with it; anything unconfirmed is marked `?`.
   `update_poll_visibility`, `override_existing_poll`, `create_poll`
 
 ## Reactions
-- `send_channel_reaction` **[done, gated]** — the only channel-reaction send
-  verb; refuses with "Feature flag is not enabled" and no header/field moves
-  it, confirmed by the APK carrying no alternative. Receiving works.
+- `send_channel_reaction` **[built, blocked — see Known limitations]** — the
+  only channel-reaction send verb (the APK carries no alternative). Refuses
+  with "Feature flag is not enabled" under every client identity. Not an
+  account gate: the same account reacts fine from the official iOS app, so the
+  server is trusting something the official app proves that a desktop client
+  cannot (most likely genuine-app / device attestation). Receiving works.
 - `get_available_reactions`, `get_paid_reactions_in_channel`,
   `send_paid_reaction_thanks`, `send_highlight_reaction` — the modern reaction
   surface is paid-reaction shaped
