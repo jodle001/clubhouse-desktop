@@ -30,7 +30,10 @@ onMounted(() => {
 
 <template>
 	<div class="page">
-		<h1 class="page__title">Notifications</h1>
+		<div class="page__head">
+			<h1 class="page__title">Notifications</h1>
+			<RouterLink :to="{ name: 'waves' }" class="btn btn-secondary btn-sm">👋 Waves</RouterLink>
+		</div>
 
 		<AppSpinner v-if="loading && !loaded" />
 		<p v-else-if="error" class="error-box">{{ error }}</p>
@@ -67,9 +70,17 @@ onMounted(() => {
 	margin: 0 auto;
 }
 
+.page__head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	margin-bottom: 1.25rem;
+}
+
 .page__title {
 	font-size: 1.3rem;
-	margin: 0 0 1.25rem;
+	margin: 0;
 }
 
 .acts {

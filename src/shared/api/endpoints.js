@@ -38,6 +38,18 @@ export const endpoints = {
 	 */
 	getActivities: (c, { cursor } = {}) => c.request("/get_activities", { body: { cursor } }),
 
+	// --- waves --------------------------------------------------------
+	// The "ping a friend to start a room" gesture. get_received_waves /
+	// get_initiated_waves answer { success, waves }. send_wave's recipient
+	// field was not named on an empty body; user_id is the field every other
+	// user-targeted verb here uses (follow, invite_speaker), so it is the bet.
+	sendWave: (c, userId) => c.request("/send_wave", { body: { user_id: userId } }),
+	getReceivedWaves: c => c.request("/get_received_waves", { body: {} }),
+	getInitiatedWaves: c => c.request("/get_initiated_waves", { body: {} }),
+	acceptWave: (c, { waveId, userId } = {}) =>
+		c.request("/accept_wave", { body: { wave_id: waveId, user_id: userId } }),
+	cancelWave: (c, userId) => c.request("/cancel_wave", { body: { user_id: userId } }),
+
 	// --- conversations ------------------------------------------------
 	/**
 	 * The modern "Chats" feed: async voice/text threads, not 1:1 DMs. Answers

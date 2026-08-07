@@ -34,7 +34,7 @@ describe("NotificationsView", () => {
 			data: { activities: [activity("Bea started following you"), activity("You were invited up")], next_cursor: null }
 		});
 
-		const wrapper = mount(NotificationsView);
+		const wrapper = mount(NotificationsView, { global: { stubs: { RouterLink: true } } });
 		await settle(wrapper);
 
 		expect(wrapper.findAll(".act")).toHaveLength(2);
@@ -47,7 +47,7 @@ describe("NotificationsView", () => {
 			data: { activities: [activity("New", { unread: true }), activity("Old")], next_cursor: null }
 		});
 
-		const wrapper = mount(NotificationsView);
+		const wrapper = mount(NotificationsView, { global: { stubs: { RouterLink: true } } });
 		await settle(wrapper);
 
 		expect(wrapper.findAll(".act--unread")).toHaveLength(1);
@@ -60,7 +60,7 @@ describe("NotificationsView", () => {
 			data: { activities: [activity("Zoe waved", { avatar: {} })], next_cursor: null }
 		});
 
-		const wrapper = mount(NotificationsView);
+		const wrapper = mount(NotificationsView, { global: { stubs: { RouterLink: true } } });
 		await settle(wrapper);
 
 		expect(wrapper.find(".act__fallback").text()).toBe("Z");
@@ -72,7 +72,7 @@ describe("NotificationsView", () => {
 			data: { activities: [activity("One")], next_cursor: "CUR" }
 		});
 
-		const wrapper = mount(NotificationsView);
+		const wrapper = mount(NotificationsView, { global: { stubs: { RouterLink: true } } });
 		await settle(wrapper);
 		expect(wrapper.find(".load-more").exists()).toBe(true);
 
@@ -92,7 +92,7 @@ describe("NotificationsView", () => {
 	it("says so plainly when there is nothing", async () => {
 		bridge.api.getActivities = vi.fn().mockResolvedValue({ ok: true, data: { activities: [] } });
 
-		const wrapper = mount(NotificationsView);
+		const wrapper = mount(NotificationsView, { global: { stubs: { RouterLink: true } } });
 		await settle(wrapper);
 
 		expect(wrapper.text()).toContain("Nothing new.");

@@ -25,6 +25,7 @@ const profile = ref(null);
 const busy = ref(false);
 const blocked = ref(false);
 const confirmingBlock = ref(false);
+const waved = ref(false);
 const mutuals = ref(null);
 const loadingMutuals = ref(false);
 
@@ -84,9 +85,29 @@ const mutualSummary = computed(() => {
 
 const houses = computed(() => profile.value?.social_clubs || []);
 
+/** The room lets you wave unless it says otherwise; hidden on your own. */
+const canWave = computed(() => !isMe.value && profile.value?.can_wave !== false);
+
+async function sendWave() {
+	if (!profile.value || waved.value) {
+		return;
+	}
+
+	busy.value = true;
+	const result = await run("sendWave", profile.value.user_id);
+
+	if (result) {
+		waved.value = true;
+		notify({ type: "success", message: `Waved at ${profile.value.name} 👋` });
+	}
+
+	busy.value = false;
+}
+
 async function load() {
 	confirmingBlock.value = false;
 	mutuals.value = null;
+	waved.value = false;
 
 	/*
 	 * Your own profile goes through /get_profile too. /me answers with a stub -
@@ -269,6 +290,16 @@ watch(() => props.id, load);
 			<template v-else-if="!isMe">
 				<button class="btn" :disabled="busy || blocked" @click="toggleFollow">
 					{{ following ? "Following" : requested ? "Requested" : "Follow" }}
+				</button>
+
+				<button
+					v-if="canWave && !blocked"
+					class="btn btn-secondary"
+					:disabled="busy || waved"
+					title="Wave"
+					@click="sendWave"
+				>
+					{{ waved ? "Waved 👋" : "👋 Wave" }}
 				</button>
 
 				<button

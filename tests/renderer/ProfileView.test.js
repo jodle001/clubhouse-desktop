@@ -72,6 +72,7 @@ beforeEach(() => {
 	bridge.api.unfollow = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
 	bridge.api.block = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
 	bridge.api.unblock = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+	bridge.api.sendWave = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
 });
 
 describe("ProfileView", () => {
@@ -167,17 +168,19 @@ describe("ProfileView", () => {
 		expect(wrapper.text()).toMatch(/needs their approval/);
 	});
 
+	// Located by text, not position, so the wave button between Follow and
+	// Block does not renumber these.
+	const buttonBy = (wrapper, re) => wrapper.findAll(".profile__actions button").find(b => re.test(b.text()));
+
 	it("asks before blocking, and does not block on the first click", async () => {
 		const wrapper = mountProfile();
 		await settle(wrapper);
 
-		const blockButton = () => wrapper.findAll(".profile__actions button")[1];
-
-		await blockButton().trigger("click");
+		await buttonBy(wrapper, /Block/).trigger("click");
 		expect(bridge.api.block).not.toHaveBeenCalled();
-		expect(blockButton().text()).toBe("Really block?");
+		expect(buttonBy(wrapper, /Really block/).exists()).toBe(true);
 
-		await blockButton().trigger("click");
+		await buttonBy(wrapper, /Really block/).trigger("click");
 		expect(bridge.api.block).toHaveBeenCalledWith(THEM);
 	});
 
@@ -185,11 +188,11 @@ describe("ProfileView", () => {
 		const wrapper = mountProfile();
 		await settle(wrapper);
 
-		await wrapper.findAll(".profile__actions button")[1].trigger("click");
-		await wrapper.findAll(".profile__actions button")[2].trigger("click");
+		await buttonBy(wrapper, /Block/).trigger("click");
+		await buttonBy(wrapper, /Cancel/).trigger("click");
 
 		expect(bridge.api.block).not.toHaveBeenCalled();
-		expect(wrapper.findAll(".profile__actions button")[1].text()).toBe("Block");
+		expect(buttonBy(wrapper, /^Block$/).exists()).toBe(true);
 	});
 
 	it("unblocks without asking, since that harms nobody", async () => {
@@ -216,6 +219,27 @@ describe("ProfileView", () => {
 		await settle(wrapper);
 
 		expect(wrapper.findAll(".profile__actions button")[0].attributes("disabled")).toBeDefined();
+	});
+
+	it("waves at someone, then shows it was sent", async () => {
+		const wrapper = mountProfile();
+		await settle(wrapper);
+
+		const waveBtn = wrapper.findAll(".profile__actions button").find(b => /Wave/.test(b.text()));
+		expect(waveBtn.text()).toContain("Wave");
+
+		await waveBtn.trigger("click");
+		await settle(wrapper);
+
+		expect(bridge.api.sendWave).toHaveBeenCalledWith(THEM);
+		expect(wrapper.findAll(".profile__actions button").find(b => /Waved/.test(b.text()))).toBeTruthy();
+	});
+
+	it("offers no wave on your own profile", async () => {
+		const wrapper = mountProfile("me");
+		await settle(wrapper);
+
+		expect(wrapper.findAll(".profile__actions button").some(b => /Wave/.test(b.text()))).toBe(false);
 	});
 
 	it("offers no follow or block buttons on your own profile", async () => {
