@@ -37,8 +37,9 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 	});
 
 	/**
-	 * Emoji floating over the room right now: { id, userId, emoji }. Each
-	 * entry removes itself after REACTION_MS, like the phone app's ticker.
+	 * Reactions floating over the room right now: { id, userId, emoji, gif }.
+	 * An entry carries an emoji or a GIF url, and removes itself after its
+	 * display time, like the phone app's ticker.
 	 */
 	const reactions = ref([]);
 	/** What this room lets people send, from join_channel. */
@@ -47,29 +48,31 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 	const reactionsBlocked = ref(false);
 
 	const REACTION_MS = 4000;
+	/** However long an event asks for, a reaction is not a billboard. */
+	const REACTION_MAX_MS = 30000;
 	let reactionSeq = 0;
 	let loggedReactionEvent = false;
 	const reactionTimers = new Set();
 
-	function showReaction(userId, emoji) {
-		if (!emoji) {
+	function showReaction(userId, { emoji = null, gif = null } = {}, ms = REACTION_MS) {
+		if (!emoji && !gif) {
 			return;
 		}
 
 		const id = ++reactionSeq;
 		// Latest wins per person, so a burst does not stack badges.
-		reactions.value = [...reactions.value.filter(r => r.userId !== userId), { id, userId, emoji }];
+		reactions.value = [...reactions.value.filter(r => r.userId !== userId), { id, userId, emoji, gif }];
 
 		const timer = setTimeout(() => {
 			reactionTimers.delete(timer);
 			reactions.value = reactions.value.filter(r => r.id !== id);
-		}, REACTION_MS);
+		}, Math.min(ms || REACTION_MS, REACTION_MAX_MS));
 		reactionTimers.add(timer);
 	}
 
-	/** The reaction to draw on this person's tile, if any. */
+	/** The reaction to draw on this person's tile - { emoji, gif } - if any. */
 	function reactionFor(userId) {
-		return reactions.value.find(r => r.userId === userId)?.emoji || null;
+		return reactions.value.find(r => r.userId === userId) || null;
 	}
 
 	/**
@@ -92,7 +95,7 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 			// The PubNub echo is neither guaranteed nor instant - showing it
 			// now is what makes the button feel like it did something.
 			// showReaction dedupes per person.
-			showReaction(target, option.emoji);
+			showReaction(target, { emoji: option.emoji });
 			return true;
 		} catch (err) {
 			// "Feature flag is not enabled" is an account gate, not a payload
@@ -555,11 +558,13 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 
 			/**
 			 * Somebody reacting with an emoji. Found the same way as live chat:
-			 * it was arriving and being logged as unhandled. Sending one takes
-			 * a target_user_id, so the event should name a target too - drawn
-			 * on the target's tile when present, the sender's otherwise. Field
-			 * names are taken defensively and the raw event is logged once per
-			 * shape, since the payload is only known from observation.
+			 * it was arriving and being logged as unhandled. The live shape
+			 * (from logging it) carries `reaction` as an object -
+			 * { id, emoji, display_time_s, ... } - plus an action_user_profile
+			 * (who reacted) and a target_user_profile (whom at). The phone app
+			 * draws it on the target's tile, which is also where sending one
+			 * puts it; older/flat field names are kept as fallbacks against a
+			 * shape that changes under us.
 			 */
 			events.on("new_channel_reaction", event => {
 				if (!loggedReactionEvent) {
@@ -567,16 +572,34 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 					console.log("[room] reaction event shape:", JSON.stringify(event).slice(0, 600));
 				}
 
-				// The reactor is action_user_profile.id - the one field the live
-				// event actually carries, found by logging it. The rest are kept
-				// as fallbacks against a shape that changes under us.
+				const detail = typeof event.reaction === "object" && event.reaction !== null ? event.reaction : null;
+
 				showReaction(
-					event.action_user_profile?.id ??
+					event.target_user_profile?.id ??
 						event.target_user_id ??
+						event.action_user_profile?.id ??
 						event.from_user_id ??
 						event.user_id ??
 						event.user_profile?.user_id,
-					event.reaction ?? event.emoji ?? event.reaction_emoji
+					{ emoji: detail?.emoji ?? (detail ? null : event.reaction) ?? event.emoji ?? event.reaction_emoji },
+					detail?.display_time_s ? detail.display_time_s * 1000 : REACTION_MS
+				);
+			});
+
+			/**
+			 * A Giphy reaction - { user_id, giphy_id, display_time_s }, found in
+			 * the unhandled-action log. The id is enough to build a media url,
+			 * drawn over the sender's tile for as long as the event asks.
+			 */
+			events.on("gif_reaction", event => {
+				if (!event.giphy_id) {
+					return;
+				}
+
+				showReaction(
+					event.target_user_profile?.id ?? event.target_user_id ?? event.user_id,
+					{ gif: `https://media.giphy.com/media/${event.giphy_id}/200w.gif` },
+					event.display_time_s ? event.display_time_s * 1000 : REACTION_MS
 				);
 			});
 

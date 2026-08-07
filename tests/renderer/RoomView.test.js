@@ -373,3 +373,87 @@ describe("opening a profile from a room", () => {
 		expect(bridge.api.leaveChannel).not.toHaveBeenCalled();
 	});
 });
+
+describe("reacting at a person", () => {
+	function joinWithPalette() {
+		bridge.api.joinChannel = vi.fn().mockResolvedValue({
+			ok: true,
+			data: joinResult({
+				users: [
+					{ user_id: 7, name: "Me", is_speaker: true },
+					{ user_id: 5, name: "Them", username: "them", is_speaker: true }
+				],
+				reactions: { channel_reactions: [{ reaction_id: 101, emoji: "❤" }] }
+			})
+		});
+		bridge.api.getProfile = vi.fn().mockResolvedValue({
+			ok: true,
+			data: { user_profile: { user_id: 5, name: "Them", username: "them" } }
+		});
+		bridge.api.me = vi.fn().mockResolvedValue({ ok: true, data: { following_ids: [], blocked_ids: [] } });
+		bridge.api.sendChannelReaction = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+	}
+
+	it("offers the room's palette on another member's sheet, aimed at them", async () => {
+		joinWithPalette();
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		await wrapper.findAll(".tile")[1].trigger("click");
+		await settle(wrapper);
+
+		const row = wrapper.find(".room__sheet-react");
+		expect(row.exists()).toBe(true);
+
+		await row.find(".room__palette-emoji").trigger("click");
+		expect(bridge.api.sendChannelReaction).toHaveBeenCalledWith("C1", 101, 5);
+	});
+
+	it("does not offer it on your own sheet - the room bar already does that", async () => {
+		joinWithPalette();
+		bridge.api.getProfile = vi.fn().mockResolvedValue({
+			ok: true,
+			data: { user_profile: { user_id: 7, name: "Me", username: "me" } }
+		});
+
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		await wrapper.findAll(".tile")[0].trigger("click");
+		await settle(wrapper);
+
+		expect(wrapper.find(".sheet").exists()).toBe(true);
+		expect(wrapper.find(".room__sheet-react").exists()).toBe(false);
+	});
+
+	it("opens the author's sheet from their name on a chat line", async () => {
+		// "Click a person in chat, then pick a reaction" - the name is the way in.
+		joinWithPalette();
+		bridge.api.getChannelMessages = vi.fn().mockResolvedValue({
+			ok: true,
+			data: {
+				success: true,
+				messages: [
+					{
+						message_id: "M1",
+						message: "hello",
+						time_created: "2026-08-06T10:00:00Z",
+						user_profile: { user_id: 5, name: "Them", username: "them" }
+					}
+				]
+			}
+		});
+
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		const author = wrapper.find(".room__author");
+		expect(author.text()).toBe("Them");
+
+		await author.trigger("click");
+		await settle(wrapper);
+
+		expect(wrapper.find(".sheet").exists()).toBe(true);
+		expect(wrapper.find(".room__sheet-react").exists()).toBe(true);
+	});
+});

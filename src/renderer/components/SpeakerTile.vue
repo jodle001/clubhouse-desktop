@@ -4,8 +4,8 @@ import AppAvatar from "./AppAvatar.vue";
 defineProps({
 	user: { type: Object, required: true },
 	speaking: { type: Boolean, default: false },
-	/** An emoji reaction floating over this person right now, or null. */
-	reaction: { type: String, default: null }
+	/** A reaction floating over this person right now - { emoji, gif } - or null. */
+	reaction: { type: Object, default: null }
 });
 
 // The room decides what opening a profile means - here it is a sheet, not a
@@ -26,8 +26,14 @@ const emit = defineEmits(["select"]);
 			<span v-if="user.is_muted" class="tile__badge" title="Muted">🔇</span>
 			<span v-else-if="user.hand_raised" class="tile__badge" title="Hand raised">✋</span>
 			<Transition name="tile-react">
-				<span v-if="reaction" :key="reaction" class="tile__reaction" aria-hidden="true">
-					{{ reaction }}
+				<span
+					v-if="reaction"
+					:key="reaction.gif || reaction.emoji"
+					class="tile__reaction"
+					aria-hidden="true"
+				>
+					<img v-if="reaction.gif" :src="reaction.gif" alt="" class="tile__gif">
+					<template v-else>{{ reaction.emoji }}</template>
 				</span>
 			</Transition>
 		</div>
@@ -95,6 +101,14 @@ const emit = defineEmits(["select"]);
 	font-size: 1.4rem;
 	filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.35));
 	pointer-events: none;
+}
+
+.tile__gif {
+	display: block;
+	width: 58px;
+	height: 58px;
+	object-fit: cover;
+	border-radius: var(--radius-sm);
 }
 
 .tile-react-enter-active {

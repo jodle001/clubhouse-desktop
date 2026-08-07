@@ -86,7 +86,7 @@ describe("emoji over the room", () => {
 
 		room._events.deliver({ action: "new_channel_reaction", from_user_id: 5, reaction: "🔥" });
 
-		expect(room.reactionFor(5)).toBe("🔥");
+		expect(room.reactionFor(5)?.emoji).toBe("🔥");
 		expect(room.reactionFor(9)).toBeNull();
 	});
 
@@ -109,7 +109,7 @@ describe("emoji over the room", () => {
 		room._events.deliver({ action: "new_channel_reaction", from_user_id: 5, reaction: "❤" });
 		room._events.deliver({ action: "new_channel_reaction", from_user_id: 5, reaction: "😂" });
 
-		expect(room.reactionFor(5)).toBe("😂");
+		expect(room.reactionFor(5)?.emoji).toBe("😂");
 	});
 
 	it("sends id and target - yourself by default - and shows it at once", async () => {
@@ -125,7 +125,7 @@ describe("emoji over the room", () => {
 		await expect(room.sendReaction(room.reactionOptions.value[0])).resolves.toBe(true);
 
 		expect(bridge.api.sendChannelReaction).toHaveBeenCalledWith("C1", 101, 9);
-		expect(room.reactionFor(9)).toBe("❤");
+		expect(room.reactionFor(9)?.emoji).toBe("❤");
 	});
 
 	it("can aim a reaction at somebody else's tile", async () => {
@@ -136,7 +136,7 @@ describe("emoji over the room", () => {
 		await room.sendReaction(room.reactionOptions.value[2], 5);
 
 		expect(bridge.api.sendChannelReaction).toHaveBeenCalledWith("C1", 103, 5);
-		expect(room.reactionFor(5)).toBe("🔥");
+		expect(room.reactionFor(5)?.emoji).toBe("🔥");
 		expect(room.reactionFor(9)).toBeNull();
 	});
 
@@ -152,7 +152,81 @@ describe("emoji over the room", () => {
 			reaction: "👏"
 		});
 
-		expect(room.reactionFor(9)).toBe("👏");
+		expect(room.reactionFor(9)?.emoji).toBe("👏");
+		expect(room.reactionFor(5)).toBeNull();
+	});
+
+	it("reads the live shape: reaction as an object, aimed at target_user_profile", async () => {
+		// Verbatim (trimmed) from a logged event: `reaction` is an object
+		// carrying the emoji and its display time, the reactor is
+		// action_user_profile and the target is target_user_profile. Reading
+		// `event.reaction` as the emoji drew "[object Object]" on the
+		// reactor's tile.
+		joinWith();
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		room._events.deliver({
+			action: "new_channel_reaction",
+			channel: "C1",
+			action_user_profile: { id: 5, name: "Them" },
+			target_user_profile: { id: 9, name: "Me" },
+			reaction: { id: 47, title: null, is_paid: false, emoji: "🙄", coins_price: 0, display_time_s: 4 }
+		});
+
+		expect(room.reactionFor(9)?.emoji).toBe("🙄");
+		expect(room.reactionFor(5)).toBeNull();
+	});
+
+	it("keeps a reaction up for as long as its event asks", async () => {
+		joinWith();
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		room._events.deliver({
+			action: "new_channel_reaction",
+			action_user_profile: { id: 5 },
+			reaction: { id: 1, emoji: "🎉", display_time_s: 10 }
+		});
+
+		await vi.advanceTimersByTimeAsync(4100);
+		expect(room.reactionFor(5)?.emoji).toBe("🎉");
+
+		await vi.advanceTimersByTimeAsync(6000);
+		expect(room.reactionFor(5)).toBeNull();
+	});
+
+	it("draws a giphy reaction from its id, for its own display time", async () => {
+		// {action:"gif_reaction", user_id, giphy_id, display_time_s} was
+		// arriving and being logged as unhandled - dropped on the floor.
+		joinWith();
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		room._events.deliver({
+			action: "gif_reaction",
+			channel: "C1",
+			user_id: 5,
+			giphy_id: "cEb1tO6Xvn0DS",
+			display_time_s: 30
+		});
+
+		expect(room.reactionFor(5)?.gif).toBe("https://media.giphy.com/media/cEb1tO6Xvn0DS/200w.gif");
+		expect(room.reactionFor(5)?.emoji).toBeNull();
+
+		await vi.advanceTimersByTimeAsync(29000);
+		expect(room.reactionFor(5)?.gif).toBeTruthy();
+
+		await vi.advanceTimersByTimeAsync(1100);
+		expect(room.reactionFor(5)).toBeNull();
+	});
+
+	it("ignores a gif event with no id rather than drawing a broken image", async () => {
+		joinWith();
+		const room = makeRoom();
+		await room.join("C1", { userId: 9 });
+
+		expect(() => room._events.deliver({ action: "gif_reaction", user_id: 5 })).not.toThrow();
 		expect(room.reactionFor(5)).toBeNull();
 	});
 
@@ -219,7 +293,7 @@ describe("emoji over the room", () => {
 		expect(() =>
 			room._events.deliver({ action: "new_channel_reaction", user_profile: { user_id: 5 }, emoji: "❤" })
 		).not.toThrow();
-		expect(room.reactionFor(5)).toBe("❤");
+		expect(room.reactionFor(5)?.emoji).toBe("❤");
 
 		expect(() => room._events.deliver({ action: "new_channel_reaction" })).not.toThrow();
 	});

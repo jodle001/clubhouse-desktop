@@ -348,7 +348,19 @@ async function send() {
 							{{ room.chat.loadingOlder ? "Loading…" : "Scroll up for earlier messages" }}
 						</li>
 						<li v-for="(message, i) in room.chat.messages" :key="message.message_id ?? i">
-							<strong>{{ message.user_profile?.name || message.name || "Someone" }}</strong>
+							<!--
+								The author opens their profile sheet, where the
+								reaction row and any moderator tools live - so
+								"react at this person" is a click on their name.
+							-->
+							<button
+								class="room__author"
+								type="button"
+								:disabled="!message.user_profile?.user_id"
+								@click="viewing = message.user_profile.user_id"
+							>
+								{{ message.user_profile?.name || message.name || "Someone" }}
+							</button>
 							<span>{{ message.message ?? message.text }}</span>
 							<button
 								v-if="message.message_id"
@@ -380,6 +392,32 @@ async function send() {
 		<EmptyState v-else-if="room.error.value" :message="room.error.value" />
 
 		<ProfileSheet v-if="viewing" :id="viewing" @close="viewing = null">
+			<!--
+				React at this person: the room's palette, aimed at their tile.
+				Only for somebody actually in the room, and not yourself - the
+				room bar already does that.
+			-->
+			<div
+				v-if="
+					viewingUser &&
+						viewingUser.user_id !== room.channel.info.user_profile_id &&
+						room.reactionOptions.value.length &&
+						!room.reactionsBlocked.value
+				"
+				class="room__sheet-react"
+			>
+				<button
+					v-for="option in room.reactionOptions.value"
+					:key="option.id ?? option.emoji"
+					class="room__palette-emoji"
+					type="button"
+					:title="`React ${option.emoji} at ${viewingUser.name}`"
+					@click="room.sendReaction(option, viewingUser.user_id)"
+				>
+					{{ option.emoji }}
+				</button>
+			</div>
+
 			<!--
 				Moderator tools over a room member's profile - only when the
 				room says you may, and never against yourself.
@@ -675,8 +713,29 @@ async function send() {
 	background: var(--surface-2);
 }
 
-.room__messages strong {
+.room__author {
 	margin-right: 0.4rem;
+	padding: 0;
+	font-weight: 600;
+	text-align: left;
+}
+
+.room__author:not(:disabled):hover {
+	text-decoration: underline;
+}
+
+.room__author:disabled {
+	cursor: default;
+}
+
+.room__sheet-react {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.15rem;
+	justify-content: center;
+	margin-top: 1rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--border);
 }
 
 .room__compose {
