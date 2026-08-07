@@ -155,10 +155,12 @@ export const endpoints = {
 	activePing: (c, channel) => c.request("/active_ping", { body: { channel, channel_id: null } }),
 
 	/**
-	 * The old is_private/is_social_mode flags are no longer enough: the API now
-	 * answers "Privacy level is required." A `privacy` string carries it -
-	 * open, social or closed, the three room kinds. The legacy flags are kept
-	 * alongside since they do no harm and an older server may still read them.
+	 * The old is_private/is_social_mode flags are no longer enough: the API
+	 * answers "Privacy level is required." - and kept answering it when the
+	 * value was sent as `privacy`, so the field is named the way the error
+	 * reads: `privacy_level`. Sent under both names with the legacy flags
+	 * alongside, since unknown fields are ignored and an older server may
+	 * still read the old ones.
 	 */
 	createChannel: (c, { topic = "", userIds = [], isPrivate = false, isSocialMode = false } = {}) => {
 		const privacy = isPrivate ? "closed" : isSocialMode ? "social" : "open";
@@ -166,6 +168,7 @@ export const endpoints = {
 			body: {
 				topic,
 				user_ids: userIds,
+				privacy_level: privacy,
 				privacy,
 				is_private: isPrivate,
 				is_social_mode: isSocialMode

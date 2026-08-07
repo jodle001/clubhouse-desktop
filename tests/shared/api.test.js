@@ -128,6 +128,31 @@ describe("endpoints", () => {
 		});
 	});
 
+	it("names the privacy level the way create_channel's error does", async () => {
+		// "Privacy level is required." - and still required when sent as
+		// `privacy`, so the field is privacy_level. Both are sent; unknown
+		// fields are ignored.
+		const transport = fakeTransport({ success: true, channel: "C9" });
+		await createApi(makeClient(transport)).createChannel({ topic: "TestRoom" });
+
+		expect(JSON.parse(transport.mock.calls[0][1].body)).toMatchObject({
+			topic: "TestRoom",
+			privacy_level: "open",
+			privacy: "open"
+		});
+	});
+
+	it("maps the room kinds onto one privacy level", async () => {
+		const transport = fakeTransport({ success: true });
+		const api = createApi(makeClient(transport));
+
+		await api.createChannel({ topic: "t", isPrivate: true });
+		expect(JSON.parse(transport.mock.calls[0][1].body)).toMatchObject({ privacy_level: "closed" });
+
+		await api.createChannel({ topic: "t", isSocialMode: true });
+		expect(JSON.parse(transport.mock.calls[1][1].body)).toMatchObject({ privacy_level: "social" });
+	});
+
 	it("exposes every endpoint as a bound function", () => {
 		const api = createApi(makeClient(fakeTransport({})));
 		for (const name of ["me", "getFeed", "joinChannel", "leaveChannel", "searchUsers"]) {
