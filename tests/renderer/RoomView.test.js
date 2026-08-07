@@ -374,6 +374,56 @@ describe("opening a profile from a room", () => {
 	});
 });
 
+describe("room settings", () => {
+	function joinAsHost() {
+		bridge.api.joinChannel = vi.fn().mockResolvedValue({
+			ok: true,
+			data: joinResult({
+				topic: "MyRoom",
+				is_room_chat_available: true,
+				is_chat_enabled: false,
+				chat_permission: 1,
+				chat_permission_options: [{ value: 1, label: "everyone" }],
+				handraise_queue_setting: 0,
+				user_capabilities: {
+					can_disable_room_chat: true,
+					can_edit_room_title: true,
+					can_edit_handraise_queue: true
+				}
+			})
+		});
+		bridge.api.enableRoomChat = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+		bridge.api.getChannelMessages = vi.fn().mockResolvedValue({ ok: true, data: { messages: [] } });
+	}
+
+	it("opens the settings sheet from the gear, and enabling chat shows the panel", async () => {
+		joinAsHost();
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		// No chat panel while chat is off.
+		expect(wrapper.find(".room__aside").exists()).toBe(false);
+
+		await wrapper.find(".room__settings-btn").trigger("click");
+		expect(wrapper.find(".rs__title").exists()).toBe(true);
+
+		// Flip the chat switch on.
+		await wrapper.find(".rs__switch").trigger("click");
+		await settle(wrapper);
+
+		expect(bridge.api.enableRoomChat).toHaveBeenCalledWith("C1");
+		expect(wrapper.find(".room__aside").exists()).toBe(true);
+	});
+
+	it("shows no gear to someone who cannot manage the room", async () => {
+		// Default joinResult grants can_post_to_chat only, no management caps.
+		const wrapper = mountRoom();
+		await settle(wrapper);
+
+		expect(wrapper.find(".room__settings-btn").exists()).toBe(false);
+	});
+});
+
 describe("the room poll", () => {
 	function joinWithPoll(extra = {}) {
 		bridge.api.joinChannel = vi.fn().mockResolvedValue({

@@ -249,6 +249,109 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		}
 	}
 
+	/**
+	 * Moderator settings for the room, read off channel.info (which is reactive,
+	 * so patching it after a successful call moves the UI at once) and changed
+	 * through the verbs read from the app. A failure is shown in place.
+	 */
+	const roomSettingsError = ref("");
+
+	/** The room's chat/hand-raise/title state, for the settings sheet. */
+	const roomSettings = computed(() => ({
+		title: channel.info?.topic || "",
+		isChatEnabled: Boolean(channel.info?.is_chat_enabled),
+		chatPermission: channel.info?.chat_permission ?? 1,
+		chatPermissionOptions: channel.info?.chat_permission_options || [],
+		handraiseQueueSetting: channel.info?.handraise_queue_setting ?? 0
+	}));
+
+	/** Turn room chat on or off, and reflect it in the chat panel immediately. */
+	async function setRoomChat(enabled) {
+		const name = channel.info?.channel;
+		if (!name) {
+			return false;
+		}
+
+		roomSettingsError.value = "";
+
+		try {
+			await call(enabled ? "enableRoomChat" : "disableRoomChat", name);
+			channel.info.is_chat_enabled = enabled;
+			chat.enabled = Boolean(channel.info.is_room_chat_available && enabled);
+
+			if (enabled) {
+				// A moderator turning chat on can post to it; the join-time
+				// capability was false only because chat was off. History was
+				// not loaded at join for the same reason, so load it now.
+				chat.canPost = Boolean(channel.info.user_capabilities?.can_post_to_chat) || canModerate.value;
+				await loadHistory(name);
+			} else {
+				chat.canPost = false;
+			}
+
+			return true;
+		} catch (err) {
+			roomSettingsError.value = err.message;
+			return false;
+		}
+	}
+
+	async function changeChatPermission(permission) {
+		const name = channel.info?.channel;
+		if (!name) {
+			return false;
+		}
+
+		roomSettingsError.value = "";
+
+		try {
+			await call("setChatPermission", name, permission);
+			channel.info.chat_permission = permission;
+			return true;
+		} catch (err) {
+			roomSettingsError.value = err.message;
+			return false;
+		}
+	}
+
+	async function changeHandraise(setting) {
+		const name = channel.info?.channel;
+		if (!name) {
+			return false;
+		}
+
+		roomSettingsError.value = "";
+
+		try {
+			await call("setHandraiseQueue", name, setting);
+			channel.info.handraise_queue_setting = setting;
+			channel.info.is_handraise_enabled = setting > 0;
+			return true;
+		} catch (err) {
+			roomSettingsError.value = err.message;
+			return false;
+		}
+	}
+
+	async function renameRoom(title) {
+		const name = channel.info?.channel;
+		const clean = String(title || "").trim();
+		if (!name || !clean) {
+			return false;
+		}
+
+		roomSettingsError.value = "";
+
+		try {
+			await call("setChannelTitle", name, clean);
+			channel.info.topic = clean;
+			return true;
+		} catch (err) {
+			roomSettingsError.value = err.message;
+			return false;
+		}
+	}
+
 	let audio = null;
 	let events = null;
 	let pingTimer = null;
@@ -985,6 +1088,12 @@ export function useRoom({ makeAudio = createAudioEngine, makeEvents = createRoom
 		loadPoll,
 		votePoll,
 		createPoll,
+		roomSettings,
+		roomSettingsError,
+		setRoomChat,
+		changeChatPermission,
+		changeHandraise,
+		renameRoom,
 		acceptInvite,
 		declineInvite,
 		toggleMute,

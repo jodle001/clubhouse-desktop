@@ -207,3 +207,128 @@ describe("room polls", () => {
 		expect(room.poll.colors).toEqual([]);
 	});
 });
+
+describe("room settings", () => {
+	function joinRoom(overrides = {}) {
+		bridge.api.joinChannel = vi.fn().mockResolvedValue({
+			ok: true,
+			data: {
+				success: true,
+				channel: "C1",
+				topic: "MyRoom",
+				user_profile_id: ME,
+				users: [{ user_id: ME, name: "Me", is_moderator: true }],
+				is_room_chat_available: true,
+				is_chat_enabled: false,
+				chat_permission: 1,
+				chat_permission_options: [
+					{ value: 1, label: "everyone" },
+					{ value: 2, label: "followers of the host" }
+				],
+				handraise_queue_setting: 0,
+				user_capabilities: {
+					can_disable_room_chat: true,
+					can_edit_room_title: true,
+					can_edit_handraise_queue: true,
+					can_post_to_chat: false
+				},
+				...overrides
+			}
+		});
+	}
+
+	it("reads the settings off the room", async () => {
+		joinRoom();
+		const room = makeRoom();
+		await room.join("C1", { userId: ME });
+
+		expect(room.roomSettings.value).toMatchObject({
+			title: "MyRoom",
+			isChatEnabled: false,
+			chatPermission: 1,
+			handraiseQueueSetting: 0
+		});
+		expect(room.roomSettings.value.chatPermissionOptions).toHaveLength(2);
+	});
+
+	it("turns chat on, which opens the panel and lets a moderator post", async () => {
+		joinRoom();
+		bridge.api.enableRoomChat = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+		bridge.api.getChannelMessages = vi.fn().mockResolvedValue({ ok: true, data: { messages: [] } });
+
+		const room = makeRoom();
+		await room.join("C1", { userId: ME });
+		expect(room.chat.enabled).toBe(false);
+
+		expect(await room.setRoomChat(true)).toBe(true);
+
+		expect(bridge.api.enableRoomChat).toHaveBeenCalledWith("C1");
+		expect(room.roomSettings.value.isChatEnabled).toBe(true);
+		expect(room.chat.enabled).toBe(true);
+		expect(room.chat.canPost).toBe(true);
+		expect(bridge.api.getChannelMessages).toHaveBeenCalled();
+	});
+
+	it("turns chat off again", async () => {
+		joinRoom({ is_chat_enabled: true });
+		bridge.api.disableRoomChat = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+
+		const room = makeRoom();
+		await room.join("C1", { userId: ME });
+
+		expect(await room.setRoomChat(false)).toBe(true);
+		expect(bridge.api.disableRoomChat).toHaveBeenCalledWith("C1");
+		expect(room.chat.enabled).toBe(false);
+		expect(room.chat.canPost).toBe(false);
+	});
+
+	it("changes who can chat", async () => {
+		joinRoom();
+		bridge.api.setChatPermission = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+
+		const room = makeRoom();
+		await room.join("C1", { userId: ME });
+
+		expect(await room.changeChatPermission(2)).toBe(true);
+		expect(bridge.api.setChatPermission).toHaveBeenCalledWith("C1", 2);
+		expect(room.roomSettings.value.chatPermission).toBe(2);
+	});
+
+	it("toggles hand raising through the queue setting", async () => {
+		joinRoom();
+		bridge.api.setHandraiseQueue = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+
+		const room = makeRoom();
+		await room.join("C1", { userId: ME });
+
+		expect(await room.changeHandraise(1)).toBe(true);
+		expect(bridge.api.setHandraiseQueue).toHaveBeenCalledWith("C1", 1);
+		expect(room.roomSettings.value.handraiseQueueSetting).toBe(1);
+	});
+
+	it("renames the room, trimmed", async () => {
+		joinRoom();
+		bridge.api.setChannelTitle = vi.fn().mockResolvedValue({ ok: true, data: { success: true } });
+
+		const room = makeRoom();
+		await room.join("C1", { userId: ME });
+
+		expect(await room.renameRoom("  New name  ")).toBe(true);
+		expect(bridge.api.setChannelTitle).toHaveBeenCalledWith("C1", "New name");
+		expect(room.roomSettings.value.title).toBe("New name");
+	});
+
+	it("reports a refused change and does not patch the room", async () => {
+		joinRoom();
+		bridge.api.setChatPermission = vi
+			.fn()
+			.mockResolvedValue({ ok: false, error: { message: "Not allowed", status: 400 } });
+
+		const room = makeRoom();
+		await room.join("C1", { userId: ME });
+
+		expect(await room.changeChatPermission(3)).toBe(false);
+		expect(room.roomSettingsError.value).toBe("Not allowed");
+		expect(room.roomSettings.value.chatPermission).toBe(1);
+	});
+});

@@ -6,6 +6,7 @@ import { useSession, updateSettings } from "../composables/useSession.js";
 import SpeakerTile from "../components/SpeakerTile.vue";
 import ProfileSheet from "../components/ProfileSheet.vue";
 import PollCard from "../components/PollCard.vue";
+import RoomSettings from "../components/RoomSettings.vue";
 import AppSpinner from "../components/AppSpinner.vue";
 import EmptyState from "../components/EmptyState.vue";
 
@@ -64,6 +65,15 @@ async function exit() {
 
 // Whose profile is open over the room, if any.
 const viewing = ref(null);
+
+// The moderator settings sheet.
+const settingsOpen = ref(false);
+
+// Shown to whoever the room lets change chat, title or hand-raise.
+const canManageRoom = computed(() => {
+	const c = room.capabilities.value;
+	return Boolean(c.can_disable_room_chat || c.can_edit_room_title || c.can_edit_handraise_queue);
+});
 
 // The room user behind the open sheet, so moderator actions know their state.
 const viewingUser = computed(
@@ -207,6 +217,15 @@ async function send() {
 							Audio is off — enable it in Settings to hear the room.
 						</p>
 					</div>
+					<button
+						v-if="canManageRoom"
+						class="btn btn-secondary room__settings-btn"
+						title="Room settings"
+						aria-label="Room settings"
+						@click="settingsOpen = true"
+					>
+						⚙️
+					</button>
 					<button class="btn btn-danger" @click="exit">Leave quietly ✌️</button>
 				</header>
 
@@ -393,6 +412,8 @@ async function send() {
 		</template>
 
 		<EmptyState v-else-if="room.error.value" :message="room.error.value" />
+
+		<RoomSettings v-if="settingsOpen" @close="settingsOpen = false" />
 
 		<ProfileSheet v-if="viewing" :id="viewing" @close="viewing = null">
 			<!--

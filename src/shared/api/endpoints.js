@@ -179,6 +179,29 @@ export const endpoints = {
 
 	endChannel: (c, channel) => c.request("/end_channel", { body: { channel } }),
 
+	// --- room settings ------------------------------------------------
+	// Verb names read from the Android app (docs/api-endpoints.md), request
+	// bodies confirmed live: each 200'd and the read-back field moved.
+
+	/** Room chat on/off. A hosted room starts with is_chat_enabled false. */
+	enableRoomChat: (c, channel) => c.request("/enable_channel_messages", { body: { channel } }),
+	disableRoomChat: (c, channel) => c.request("/disable_channel_messages", { body: { channel } }),
+
+	/** Who may chat: 1 everyone, 2 the host's followers, 3 trusted followers. */
+	setChatPermission: (c, channel, permission) =>
+		c.request("/set_chat_permission", { body: { channel, chat_permission: permission } }),
+
+	/**
+	 * Hand-raise mode. change_handraise_settings 404s; the live verb is this
+	 * one, taking handraise_queue_setting (0 off, non-zero on).
+	 */
+	setHandraiseQueue: (c, channel, setting) =>
+		c.request("/update_handraise_queue_setting", { body: { channel, handraise_queue_setting: setting } }),
+
+	/** Rename the room. The field is `title`, not topic/channel_title. */
+	setChannelTitle: (c, channel, title) =>
+		c.request("/set_channel_title", { body: { channel, title } }),
+
 	// --- room polls ---------------------------------------------------
 	// join_channel carries channel_user_poll; these three were confirmed live.
 	// A poll is poll_metadata { poll_id, poll_title, poll_options[{ poll_option_id,
