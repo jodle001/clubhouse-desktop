@@ -1,20 +1,18 @@
 #!/usr/bin/env node
 /**
- * Learns the endpoints behind a room's settings.
+ * Confirms the request bodies for the room-settings verbs.
  *
  *   npm run probe:settings -- --channel <name>
  *
- * join_channel reports a room's settings in full - is_chat_enabled and
- * chat_permission, is_handraise_enabled / handraise_permission, the
- * privacy_settings, can_edit_room_title - but not the verbs that change them.
- * A freshly hosted room even comes back with chat off, which is why a host
- * sees no chat panel and has no way to turn it on. This asks the server to
- * name each mutation the way it named privacy_level and the poll verbs: one
- * 400 (or a flipped field) at a time.
+ * The verb names are no longer a guess - they were read out of the Android app
+ * (see docs/api-endpoints.md): enable_channel_messages / disable_channel_messages
+ * for room chat, set_chat_permission, change_handraise_settings,
+ * update_handraise_queue_setting, set_channel_title. What is still unknown is
+ * the exact field each wants, so this sends the plausible body for each real
+ * verb and reads the room back to see the setting move, restoring anything it
+ * changed.
  *
- * It changes settings on the room, so run it against a room you started
- * (+ Room). Each section reads the room back to show whether the field moved,
- * and restores anything it flipped (chat back off, privacy back to public).
+ * Run it against a room you started (+ Room); it changes that room's settings.
  */
 
 import { readFileSync } from "node:fs";
@@ -71,11 +69,7 @@ const host = new URL(API_ROOT).host;
 async function post(path, body) {
 	const headers = buildHeaders({ ...session, host });
 	headers["Content-Type"] = "application/json; charset=utf-8";
-	const response = await nodeTransport(API_ROOT + path, {
-		method: "POST",
-		headers,
-		body: JSON.stringify(body)
-	});
+	const response = await nodeTransport(API_ROOT + path, { method: "POST", headers, body: JSON.stringify(body) });
 	const text = await response.text();
 
 	let data = null;
@@ -111,12 +105,7 @@ function heading(text) {
 
 /** The room's current settings, the fields these verbs move. */
 async function readSettings() {
-	const joined = await post("/join_channel", {
-		channel,
-		attribution_source: "feed",
-		attribution_details: "e30="
-	});
-
+	const joined = await post("/join_channel", { channel, attribution_source: "feed", attribution_details: "e30=" });
 	const d = joined.data || {};
 	return {
 		ok: ok(joined),
@@ -124,10 +113,32 @@ async function readSettings() {
 		chat_permission: d.chat_permission,
 		is_handraise_enabled: d.is_handraise_enabled,
 		handraise_permission: d.handraise_permission,
-		privacy: d.privacy_settings?.type,
-		topic: d.topic,
-		caps: d.user_capabilities || {}
+		handraise_queue_setting: d.handraise_queue_setting,
+		topic: d.topic
 	};
+}
+
+/**
+ * Send the plausible bodies for one known verb until one is accepted, print
+ * each verdict, then read the room back to show whether `field` moved.
+ * Returns the winning body.
+ */
+async function confirm(title, path, bodies, field) {
+	heading(title);
+
+	for (const body of bodies) {
+		const result = await post(path, body);
+		const shown = Object.entries(body).filter(([k]) => k !== "channel").map(([k, v]) => `${k}=${v}`).join(" ");
+		console.log(`${path.padEnd(30)} ${shown.padEnd(42)} ${verdict(result)}`);
+
+		if (ok(result)) {
+			const after = await readSettings();
+			console.log(`  -> ${field} is now ${JSON.stringify(after[field])}`);
+			return body;
+		}
+	}
+
+	return null;
 }
 
 console.log(`\nIdentity: ${APP_IDENTITY.userAgent} v${APP_IDENTITY.appVersion} (${APP_IDENTITY.appBuild})`);
@@ -139,124 +150,86 @@ if (!before.ok) {
 }
 
 heading(`current settings for ${channel}`);
-console.log(JSON.stringify(before, null, 0));
+console.log(JSON.stringify(before));
 
-/**
- * Walk a set of (path, body) attempts. Stops at the first that is accepted or
- * fails on something other than a missing route/field, printing each verdict.
- * Returns the winning attempt, if any.
- */
-async function ladder(title, attempts, confirm) {
-	heading(title);
+// --- room chat: the switch a host needs -------------------------------------
 
-	for (const [path, body] of attempts) {
-		const result = await post(path, body);
-		const shown = Object.entries(body)
-			.filter(([k]) => k !== "channel")
-			.map(([k, v]) => `${k}=${v}`)
-			.join(" ");
-		console.log(`${path.padEnd(38)} ${shown.padEnd(28)} ${verdict(result)}`);
-
-		if (ok(result)) {
-			if (confirm) {
-				const after = await readSettings();
-				console.log(`  -> ${confirm}: ${JSON.stringify(confirm.split(",").reduce((o, k) => ((o[k.trim()] = after[k.trim()]), o), {}))}`);
-			}
-			return { path, body };
-		}
-	}
-
-	return null;
-}
-
-// --- chat: the one that blocks a host from seeing chat ----------------------
-
-const chatWin = await ladder(
-	"enable chat (a hosted room starts with is_chat_enabled false)",
-	[
-		["/change_channel_is_chat_enabled", { channel, is_enabled: true }],
-		["/change_channel_is_chat_enabled", { channel, is_chat_enabled: true }],
-		["/update_channel_chat", { channel, is_chat_enabled: true }],
-		["/change_channel_chat_mode", { channel, chat_permission: 1 }],
-		["/set_channel_chat_permission", { channel, chat_permission: 1 }],
-		["/update_chat_permission", { channel, chat_permission: 1 }],
-		["/enable_channel_chat", { channel }],
-		["/change_channel_chat", { channel, is_chat_enabled: true, chat_permission: 1 }]
-	],
-	"is_chat_enabled,chat_permission"
+const chatOn = await confirm(
+	"enable_channel_messages (a hosted room starts with chat off)",
+	"/enable_channel_messages",
+	[{ channel }, { channel, is_enabled: true }],
+	"is_chat_enabled"
 );
 
-// Put chat back the way it was, if we turned it on and know the verb.
-if (chatWin && before.is_chat_enabled === false) {
-	const off = { ...chatWin.body };
-	if ("is_enabled" in off) off.is_enabled = false;
-	if ("is_chat_enabled" in off) off.is_chat_enabled = false;
-	// chat_permission has no "off"; disabling is a different field, so only
-	// restore the boolean forms.
-	if ("is_enabled" in chatWin.body || "is_chat_enabled" in chatWin.body) {
-		await post(chatWin.path, off);
-		console.log("  (restored chat to off)");
-	}
-}
-
-// --- hand-raise mode --------------------------------------------------------
-
-await ladder(
-	"hand-raise permission",
+// Who may chat, while chat is on.
+await confirm(
+	"set_chat_permission (1 everyone, 2 host's followers, 3 trusted)",
+	"/set_chat_permission",
 	[
-		["/change_handraise_permission", { channel, handraise_permission: 1 }],
-		["/change_channel_handraise_permission", { channel, handraise_permission: 1 }],
-		["/update_channel_handraise", { channel, is_handraise_enabled: true }],
-		["/set_handraise_permission", { channel, handraise_permission: 1 }],
-		["/change_channel_is_handraise_enabled", { channel, is_enabled: true }]
+		{ channel, chat_permission: 2 },
+		{ channel, permission: 2 },
+		{ channel, chat_permission_option: 2 }
 	],
-	"is_handraise_enabled,handraise_permission"
+	"chat_permission"
 );
 
-// Restore hand-raise to what it was, best effort.
-if (before.handraise_permission !== undefined) {
-	await post("/change_handraise_permission", { channel, handraise_permission: before.handraise_permission }).catch(() => {});
+// Put chat back the way it was.
+if (chatOn && before.is_chat_enabled === false) {
+	await post("/disable_channel_messages", chatOn.is_enabled === undefined ? { channel } : { channel, is_enabled: false });
+	console.log("  (restored chat to off)");
 }
 
-// --- privacy (public / social / private), the 2021 verbs and newer shapes ---
+// --- hand-raise -------------------------------------------------------------
 
-const privacyWin = await ladder(
-	"privacy - change to private, then restore",
+await confirm(
+	"change_handraise_settings",
+	"/change_handraise_settings",
 	[
-		["/change_channel_privacy", { channel, privacy_level: "PRIVATE" }],
-		["/update_channel_privacy", { channel, privacy_level: "PRIVATE" }],
-		["/make_channel_private", { channel }],
-		["/set_channel_privacy", { channel, privacy_level: "PRIVATE" }],
-		["/change_privacy", { channel, privacy_level: "PRIVATE" }]
+		{ channel, is_handraise_enabled: true, handraise_permission: 1 },
+		{ channel, is_enabled: true, handraise_permission: 1 },
+		{ channel, is_handraise_enabled: true }
 	],
-	"privacy"
+	"is_handraise_enabled"
 );
 
-// Always try to put it back to public.
-if (privacyWin && before.privacy) {
-	for (const [path, body] of [
-		[privacyWin.path, { channel, privacy_level: "PUBLIC" }],
-		["/make_channel_public", { channel }]
-	]) {
-		const back = await post(path, body);
-		if (ok(back)) {
-			console.log(`  (restored privacy to public via ${path})`);
-			break;
-		}
-	}
-}
-
-// --- room title -------------------------------------------------------------
-
-await ladder(
-	"edit the room title",
+await confirm(
+	"update_handraise_queue_setting",
+	"/update_handraise_queue_setting",
 	[
-		["/change_channel_topic", { channel, topic: before.topic }],
-		["/update_channel_topic", { channel, topic: before.topic }],
-		["/edit_channel_topic", { channel, topic: before.topic }],
-		["/change_channel_title", { channel, title: before.topic }]
+		{ channel, handraise_queue_setting: 1 },
+		{ channel, queue_setting: 1 }
+	],
+	"handraise_queue_setting"
+);
+
+// Restore hand-raise to what it was.
+await post("/change_handraise_settings", {
+	channel,
+	is_handraise_enabled: Boolean(before.is_handraise_enabled),
+	handraise_permission: before.handraise_permission ?? 0
+}).catch(() => {});
+await post("/update_handraise_queue_setting", { channel, handraise_queue_setting: before.handraise_queue_setting ?? 0 }).catch(() => {});
+
+// --- rename -----------------------------------------------------------------
+
+await confirm(
+	"set_channel_title",
+	"/set_channel_title",
+	[
+		{ channel, title: `${before.topic} ` },
+		{ channel, channel_title: `${before.topic} ` },
+		{ channel, topic: `${before.topic} ` }
 	],
 	"topic"
 );
+
+// Put the title back exactly.
+for (const key of ["title", "channel_title", "topic"]) {
+	const back = await post("/set_channel_title", { channel, [key]: before.topic });
+	if (ok(back)) {
+		console.log(`  (restored title via ${key})`);
+		break;
+	}
+}
 
 console.log("\nDone. Settings were restored where a verb was found. Paste the output back.\n");

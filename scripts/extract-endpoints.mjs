@@ -90,15 +90,22 @@ function asciiRuns(buf) {
 // The verbs Clubhouse's endpoints begin with, and the nouns they act on. A
 // token that starts with a verb or names one of these domains, and reads like
 // a route, is almost certainly an endpoint.
+// Endpoints are verbs acting on a resource, so they begin with one. Anchoring
+// on the verb prefix is what separates a route ("enable_channel_messages")
+// from a field ("is_chat_enabled") or a resource id ("notification_bg").
 const VERBS =
-	/^(get|send|create|update|change|make|set|delete|remove|add|leave|join|start|complete|accept|reject|decline|invite|uninvite|block|unblock|follow|unfollow|vote|submit|end|mute|unmute|report|search|wave|active|check|refresh|me|hide|unhide|pin|unpin|save|unsave|edit|enable|disable|approve|cancel|record|clip|share|feed|raise)_/;
-const DOMAINS = /(channel|poll|reaction|chat|handraise|hand_raise|speaker|moderator|privacy|club|profile|follow|conversation|message|wave|notification|topic|room|user)/;
+	/^(get|send|create|update|change|make|set|delete|remove|add|leave|join|start|complete|accept|reject|decline|invite|uninvite|block|unblock|follow|unfollow|vote|submit|end|mute|unmute|report|search|hide|unhide|pin|unpin|save|unsave|edit|enable|disable|approve|cancel|record|schedule|preview|expire|refresh|initiate|suspend|unsuspend|subscribe|unsubscribe|mark|ignore|check|rsvp|grant|reset|alias|resend|call)_[a-z0-9_]+$/;
+
+// Families that are plainly not routes: instrumentation SDK resources, Android
+// notification/drawable ids, and the like. Cheaper to name them than to guess
+// every verb a field might accidentally start with.
+const NOISE = /^(ib|ibc|ibg|ibg_|instabug|notification_(?!settings)|anr_|profile_(chunk|sample|lifecycle|id|release)|user_(attributes|events|steps|data|bundle|class|since|type|uuid|release))/;
 
 const tokens = new Set();
 for (const dex of dexes) {
 	for (const run of asciiRuns(readEntry(sourceApk, dex))) {
-		// Endpoints are lowercase snake_case single segments, no slash.
-		if (/^[a-z][a-z0-9_]{3,60}$/.test(run) && run.includes("_") && (VERBS.test(run) || DOMAINS.test(run))) {
+		// Lowercase snake_case single segment, verb-led, not obvious noise.
+		if (/^[a-z][a-z0-9_]{3,60}$/.test(run) && VERBS.test(run) && !NOISE.test(run)) {
 			tokens.add(run);
 		}
 	}
