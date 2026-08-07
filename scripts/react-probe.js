@@ -255,39 +255,84 @@ const retried = await post(
 );
 console.log(`send: ${verdict(retried)}`);
 
-// --- 5. the other suspected paths -------------------------------------------
+// --- 5. the message pipeline, in earnest ------------------------------------
+//
+// The probe above proved the gate is not the identity: the reaction
+// experiment is disabled under every claim, iOS included, and iOS cannot even
+// join. So send_channel_reaction is a dead end - it is the deprecated verb,
+// flagged off. The live evidence points elsewhere: a reaction arrives as a
+// new_channel_reaction event carrying message_id, num_messages and
+// message_type 6 - the shape of a chat message. The phone almost certainly
+// posts reactions through the message pipeline. This section pushes on that
+// with a real message value (the last run only sent an empty one, which is
+// why every line said "Message is required").
+//
+// Everything here runs under the app's own working identity - the one that
+// can actually operate in the room - and aims at you, in your own room.
 
-heading("gif reaction (user_capabilities grants can_gif_react)");
+const emoji = options.find(o => (o.reaction_id ?? o.id) === reactionId)?.emoji || "❤";
+const working = APP_IDENTITY;
 
-// A mild giphy id seen live in a room. If any of these succeed, a gif lands
-// in the room - which is why this runs against a room of your own.
-const GIPHY = "cEb1tO6Xvn0DS";
+heading("send_channel_message, message_type 6, with a real message");
 
-for (const [path, body] of [
-	["/send_channel_reaction", { channel, giphy_id: GIPHY, target_user_id: aimAt }],
-	["/send_gif_reaction", { channel, giphy_id: GIPHY, target_user_id: aimAt }],
-	["/send_channel_gif_reaction", { channel, giphy_id: GIPHY, target_user_id: aimAt }],
-	["/gif_react", { channel, giphy_id: GIPHY, target_user_id: aimAt }]
-]) {
-	const sent = await post(path, body, ios);
-	console.log(`${path.padEnd(28)} ${verdict(sent)}`);
+// The field the reaction rides in is unknown, so vary it: the emoji as the
+// message, the reaction_id alongside, the emoji under a reaction field. A
+// line that is no longer "Message is required" and no longer "Feature flag"
+// is the shape that works - or names the next field it wants.
+const messageAttempts = [
+	{ channel, message: emoji, message_type: 6, target_user_id: aimAt },
+	{ channel, message: emoji, message_type: 6, reaction_id: reactionId, target_user_id: aimAt },
+	{ channel, message: emoji, message_type: 6, reaction_id: reactionId },
+	{ channel, message: String(reactionId), message_type: 6, target_user_id: aimAt },
+	{ channel, message: emoji, message_type: 6, reaction: reactionId, target_user_id: aimAt }
+];
+
+for (const body of messageAttempts) {
+	const sent = await post("/send_channel_message", body, working);
+	const shown = Object.entries(body)
+		.filter(([k]) => k !== "channel")
+		.map(([k, v]) => `${k}=${v}`)
+		.join(" ");
+	console.log(`${shown.padEnd(56)} ${verdict(sent)}`);
 }
 
-heading("the chat pipeline (reactions carry message_type 6)");
+heading("other reaction verbs the modern client might use");
 
-// new_channel_reaction events have message_id and num_messages like chat
-// lines do. If the phone writes reactions through the chat sender, the 400s
-// will name the fields it wants; an empty message means nothing readable is
-// posted even if one lands.
-for (const body of [
-	{ channel, message: "", message_type: 6, reaction_id: reactionId, target_user_id: aimAt },
-	{ channel, message_type: 6, reaction_id: reactionId, target_user_id: aimAt }
+// Names worth ruling in or out, sent with the fields send_channel_reaction
+// validated. A 404 is "no such path"; anything else means the name is live.
+for (const path of [
+	"/send_channel_reaction_v2",
+	"/send_reaction_v2",
+	"/react_to_channel",
+	"/send_channel_emoji_reaction",
+	"/create_channel_reaction",
+	"/add_channel_reaction"
 ]) {
-	const sent = await post("/send_channel_message", body, ios);
-	console.log(`${Object.keys(body).join(",").padEnd(52)} ${verdict(sent)}`);
+	const sent = await post(path, { channel, reaction_id: reactionId, target_user_id: aimAt }, working);
+	console.log(`${path.padEnd(32)} ${verdict(sent)}`);
+}
+
+heading("a gif reaction through the message pipeline");
+
+// user_capabilities grants can_gif_react and the room is_gif_enabled, and a
+// live gif_reaction event carried only { user_id, giphy_id, display_time_s }.
+// The dedicated verbs 404, so try the message pipeline for it too.
+const GIPHY = "cEb1tO6Xvn0DS";
+
+for (const body of [
+	{ channel, message: "", message_type: 6, giphy_id: GIPHY, target_user_id: aimAt },
+	{ channel, giphy_id: GIPHY, message_type: 6, target_user_id: aimAt },
+	{ channel, giphy_id: GIPHY, target_user_id: aimAt }
+]) {
+	const sent = await post("/send_channel_message", body, working);
+	const shown = Object.entries(body)
+		.filter(([k]) => k !== "channel")
+		.map(([k, v]) => `${k}=${v}`)
+		.join(" ");
+	console.log(`${shown.padEnd(56)} ${verdict(sent)}`);
 }
 
 console.log(
 	"\nDone. Nothing left the channel - the app can stay in the room.\n" +
-		"Paste this output back; the line that stops saying 'Feature flag' is the answer.\n"
+		"The line that is neither 'Message is required' nor 'Feature flag' is the way in.\n"
 );

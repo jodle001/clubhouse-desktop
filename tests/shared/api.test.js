@@ -128,63 +128,17 @@ describe("endpoints", () => {
 		});
 	});
 
-	it("sends privacy_level, spelled the way this API spells enums", async () => {
-		// The server named the field ("Privacy level is required.") and then
-		// rejected the lowercase value ('"open" is not a valid choice.') -
-		// its other enums are uppercase, so that is the first spelling tried.
+	it("creates an open room with privacy_level PUBLIC, in one request", async () => {
+		// Verified live: privacy_level "PUBLIC" is accepted and the response
+		// echoes privacy_settings.type "public". No spelling ladder any more.
 		const transport = fakeTransport({ success: true, channel: "C9" });
 		await createApi(makeClient(transport)).createChannel({ topic: "TestRoom" });
 
 		expect(transport).toHaveBeenCalledTimes(1);
 		expect(JSON.parse(transport.mock.calls[0][1].body)).toMatchObject({
 			topic: "TestRoom",
-			privacy_level: "OPEN"
+			privacy_level: "PUBLIC"
 		});
-	});
-
-	it("walks the spellings when the server rejects the choice", async () => {
-		const transport = vi
-			.fn()
-			.mockResolvedValueOnce({
-				ok: true,
-				status: 400,
-				text: async () => JSON.stringify({ success: false, error_message: '"OPEN" is not a valid choice.' })
-			})
-			.mockResolvedValueOnce({
-				ok: true,
-				status: 200,
-				text: async () => JSON.stringify({ success: true, channel: "C9" })
-			});
-
-		const result = await createApi(makeClient(transport)).createChannel({ topic: "t" });
-
-		expect(result.channel).toBe("C9");
-		expect(JSON.parse(transport.mock.calls[1][1].body)).toMatchObject({ privacy_level: "PUBLIC" });
-	});
-
-	it("gives up with the server's own words when no spelling passes", async () => {
-		const transport = fakeTransport(
-			{ success: false, error_message: '"open_room" is not a valid choice.' },
-			{ status: 400, ok: true }
-		);
-
-		await expect(createApi(makeClient(transport)).createChannel({ topic: "t" })).rejects.toThrow(
-			/not a valid choice/
-		);
-		// Every spelling for an open room was tried before giving up.
-		expect(transport).toHaveBeenCalledTimes(4);
-	});
-
-	it("does not retry an error that is not about the choice", async () => {
-		const transport = fakeTransport(
-			{ success: false, error_message: "You are suspended." },
-			{ status: 400, ok: true }
-		);
-
-		await expect(createApi(makeClient(transport)).createChannel({ topic: "t" })).rejects.toThrow(
-			/suspended/
-		);
-		expect(transport).toHaveBeenCalledTimes(1);
 	});
 
 	it("maps the room kinds onto one privacy level", async () => {
@@ -192,7 +146,7 @@ describe("endpoints", () => {
 		const api = createApi(makeClient(transport));
 
 		await api.createChannel({ topic: "t", isPrivate: true });
-		expect(JSON.parse(transport.mock.calls[0][1].body)).toMatchObject({ privacy_level: "CLOSED" });
+		expect(JSON.parse(transport.mock.calls[0][1].body)).toMatchObject({ privacy_level: "PRIVATE" });
 
 		await api.createChannel({ topic: "t", isSocialMode: true });
 		expect(JSON.parse(transport.mock.calls[1][1].body)).toMatchObject({ privacy_level: "SOCIAL" });

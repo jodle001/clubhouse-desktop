@@ -158,40 +158,23 @@ export const endpoints = {
 	 * The old is_private/is_social_mode flags are no longer enough. The server
 	 * named its field one 400 at a time: "Privacy level is required." while it
 	 * was sent as `privacy`, then '"open" is not a valid choice.' once
-	 * privacy_level carried it - so the field is right and the spelling of its
-	 * values is not. Those spellings are unknown, but this API writes its
-	 * other enums uppercase (VOICE_REPLY), so walk the plausible ones; a
-	 * rejected spelling costs one 400 and creates nothing, and any other
-	 * error is the caller's to see.
+	 * privacy_level carried it - so the field is right and the value spelling
+	 * was wrong. Verified live: an open room is created with privacy_level
+	 * "PUBLIC" (the response echoes privacy_settings.type "public"). The other
+	 * two kinds are spelled to match; the legacy flags ride along, ignored if
+	 * unread.
 	 */
-	createChannel: async (c, { topic = "", userIds = [], isPrivate = false, isSocialMode = false } = {}) => {
-		const spellings = isPrivate
-			? ["CLOSED", "PRIVATE", "private", "closed"]
-			: isSocialMode
-				? ["SOCIAL", "social"]
-				: ["OPEN", "PUBLIC", "public", "open_room"];
-
-		let refused;
-		for (const level of spellings) {
-			try {
-				return await c.request("/create_channel", {
-					body: {
-						topic,
-						user_ids: userIds,
-						privacy_level: level,
-						is_private: isPrivate,
-						is_social_mode: isSocialMode
-					}
-				});
-			} catch (err) {
-				if (!/not a valid choice/i.test(err.message)) {
-					throw err;
-				}
-				refused = err;
+	createChannel: (c, { topic = "", userIds = [], isPrivate = false, isSocialMode = false } = {}) => {
+		const privacyLevel = isPrivate ? "PRIVATE" : isSocialMode ? "SOCIAL" : "PUBLIC";
+		return c.request("/create_channel", {
+			body: {
+				topic,
+				user_ids: userIds,
+				privacy_level: privacyLevel,
+				is_private: isPrivate,
+				is_social_mode: isSocialMode
 			}
-		}
-
-		throw refused;
+		});
 	},
 
 	endChannel: (c, channel) => c.request("/end_channel", { body: { channel } }),
